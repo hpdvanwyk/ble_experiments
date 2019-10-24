@@ -1,0 +1,36 @@
+{
+	"folders": [
+		{
+			"path": "ble_sensor_coded"
+		},
+		{
+			"path": "/home/hendrik/bin/nRF5_SDK_15.3.0_59ac345"
+		},
+		{
+			"path": "ble_app_sensor_central"
+		},
+		{
+			"path": "ble_experiment_exporter"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"nrf_sdh.h": "c",
+			"ble_ts_c.h": "c",
+			"nrf_error.h": "c",
+			"stdint.h": "c",
+			"string.h": "c",
+			"nrf.h": "c",
+			"nordic_common.h": "c",
+			"app_error.h": "c",
+			"nrf_sdm.h": "c",
+			"ble.h": "c",
+			"nrf_soc.h": "c",
+			"nrf_sdh_soc.h": "c",
+			"sensorsim.h": "c",
+			"pb.h": "c",
+			"oo_temp.h": "c",
+			"app_timer.h": "c"
+		}
+	}
+}

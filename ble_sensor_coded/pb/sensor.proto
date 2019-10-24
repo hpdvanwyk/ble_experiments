@@ -1,0 +1,25 @@
+syntax = "proto3";
+import "nanopb.proto";
+
+option go_package = "pb";
+
+message CentralMessage {
+    sint32 rssi = 1;
+    bytes RemoteId = 2 [(nanopb).max_size = 6, (nanopb).fixed_length = true];
+}
+
+message SensorMessage {
+    repeated TemperatureReading Readings = 1 [(nanopb).max_count = 3];
+    MJReading MJReading = 2;
+}
+
+message TemperatureReading {
+    sint32 Temperature = 1;
+    bytes Id = 2 [(nanopb).max_size = 6, (nanopb).fixed_length = true];
+}
+
+message MJReading {
+    int32 Temperature = 1;
+    int32 Humidity = 2;
+    int32 Battery = 3;
+}
