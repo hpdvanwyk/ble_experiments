@@ -1,4 +1,5 @@
 /**
+ * Copyright (c) 2019 Hendrik van Wyk
  * Copyright (c) 2014 - 2019, Nordic Semiconductor ASA
  *
  * All rights reserved.
