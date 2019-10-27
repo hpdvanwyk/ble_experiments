@@ -81,8 +81,8 @@
 #define LEDBUTTON_BUTTON BSP_BUTTON_0              /**< Button that writes to the LED characteristic of the peer. */
 #define BUTTON_DETECTION_DELAY APP_TIMER_TICKS(50) /**< Delay from a GPIOTE event until a button is reported as pushed (in number of timer ticks). */
 
-#define RSSI_CHANGE_THRESHOLD 3
-#define RSSI_CHANGE_SKIP 5
+#define RSSI_CHANGE_THRESHOLD 1
+#define RSSI_CHANGE_SKIP 1
 
 #define SEC_PARAM_BOND 1                               /**< Perform bonding. */
 #define SEC_PARAM_MITM 0                               /**< Man In The Middle protection not required. */
@@ -129,6 +129,16 @@ static void scan_evt_handler(scan_evt_t const* p_scan_evt) {
     ret_code_t err_code;
 
     switch (p_scan_evt->scan_evt_id) {
+    case NRF_BLE_SCAN_EVT_FILTER_MATCH: {
+        NRF_LOG_DEBUG("filtermatch rssi %d", p_scan_evt->params.filter_match.p_adv_report->rssi);
+        const uint8_t* addr = p_scan_evt->params.filter_match.p_adv_report->peer_addr.addr;
+        NRF_LOG_INFO("filtermatch %02x:%02x:%02x:%02x:%02x:%02x ",
+                     addr[0], addr[1], addr[2],
+                     addr[3], addr[4], addr[5]);
+        const ble_gap_evt_adv_report_t* adv = p_scan_evt->params.filter_match.p_adv_report;
+        NRF_LOG_INFO("adv %d", adv->data.len);
+        NRF_LOG_INFO("adv %d", adv->data.len);
+    } break;
     case NRF_BLE_SCAN_EVT_CONNECTING_ERROR: {
         err_code = p_scan_evt->params.connecting_err.err_code;
         APP_ERROR_CHECK(err_code);
@@ -145,9 +155,11 @@ static ble_gap_scan_params_t m_scan_param = /**< Scan parameters requested for s
         .interval      = NRF_BLE_SCAN_SCAN_INTERVAL,
         .window        = NRF_BLE_SCAN_SCAN_WINDOW,
         .filter_policy = BLE_GAP_SCAN_FP_ACCEPT_ALL,
-        .timeout       = NRF_BLE_SCAN_SCAN_DURATION,
-        .scan_phys     = BLE_GAP_PHY_CODED | BLE_GAP_PHY_1MBPS,
-        .extended      = true,
+        // Something the documentation fails to mention is that this timeout value is also for connecting
+        // to a device, so a value of 0 could hang forever if a device only appears briefly.
+        .timeout   = 500, // 5 seconds
+        .scan_phys = BLE_GAP_PHY_CODED | BLE_GAP_PHY_1MBPS,
+        .extended  = true,
 };
 
 /**@brief Function for initializing the scanning and setting the filters.
@@ -333,9 +345,23 @@ static void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context) {
     } break;
 
     case BLE_GAP_EVT_TIMEOUT: {
-        // Timeout for scanning is not specified, so only the connection requests can time out.
-        if (p_gap_evt->params.timeout.src == BLE_GAP_TIMEOUT_SRC_CONN) {
+        switch (p_gap_evt->params.timeout.src) {
+        case BLE_GAP_TIMEOUT_SRC_CONN: {
             NRF_LOG_DEBUG("Connection request timed out.");
+        } break;
+        case BLE_GAP_TIMEOUT_SRC_SCAN: {
+            // Logging this just polutes the log
+        } break;
+        case BLE_GAP_TIMEOUT_SRC_AUTH_PAYLOAD: {
+            return;
+        } break;
+        default:
+            break;
+        }
+        if (ble_conn_state_central_conn_count() == NRF_SDH_BLE_CENTRAL_LINK_COUNT) {
+            scan_start(&m_scan_noconnect);
+        } else {
+            scan_start(&m_scan);
         }
     } break;
 
@@ -596,8 +622,7 @@ static void pm_evt_handler(pm_evt_t const* p_evt) {
         if (p_evt->params.conn_sec_failed.error == PM_CONN_SEC_ERROR_PIN_OR_KEY_MISSING) {
             // Rebond if one party has lost its keys.
             err_code = pm_conn_secure(p_evt->conn_handle, true);
-
-            if (err_code != NRF_ERROR_BUSY) {
+            if (err_code != NRF_ERROR_BUSY && err_code != NRF_ERROR_TIMEOUT) {
                 APP_ERROR_CHECK(err_code);
             }
         }

@@ -82,7 +82,7 @@
 
 #define DEVICE_NAME "Can has bluetooth?"        /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME "NordicSemiconductor" /**< Manufacturer. Will be passed to Device Information Service. */
-#define APP_ADV_INTERVAL 1223                   /**< The advertising interval (in units of 0.625 ms. This value corresponds to 187.5 ms). */
+#define APP_ADV_INTERVAL 798                   /**< The advertising interval (in units of 0.625 ms.). */
 
 #define APP_ADV_DURATION 0
 
@@ -94,10 +94,10 @@
 #define LED_OFF_INTERVAL APP_TIMER_TICKS(9900)
 #define LED_ON_INTERVAL APP_TIMER_TICKS(100)
 
-#define MIN_CONN_INTERVAL MSEC_TO_UNITS(900, UNIT_1_25_MS) /**< Minimum acceptable connection interval (0.4 seconds). */
-#define MAX_CONN_INTERVAL MSEC_TO_UNITS(950, UNIT_1_25_MS) /**< Maximum acceptable connection interval (0.65 second). */
-#define SLAVE_LATENCY 1                                   /**< Slave latency. */
-#define CONN_SUP_TIMEOUT MSEC_TO_UNITS(14000, UNIT_10_MS) /**< Connection supervisory timeout (14 seconds). */
+#define MIN_CONN_INTERVAL MSEC_TO_UNITS(200, UNIT_1_25_MS) /**< Minimum acceptable connection interval (0.4 seconds). */
+#define MAX_CONN_INTERVAL MSEC_TO_UNITS(200, UNIT_1_25_MS) /**< Maximum acceptable connection interval (0.65 second). */
+#define SLAVE_LATENCY 10                                    /**< Slave latency. */
+#define CONN_SUP_TIMEOUT MSEC_TO_UNITS(14000, UNIT_10_MS)  /**< Connection supervisory timeout (14 seconds). */
 
 #define FIRST_CONN_PARAMS_UPDATE_DELAY APP_TIMER_TICKS(1000) /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY APP_TIMER_TICKS(30000) /**< Time between each call to sd_ble_gap_conn_param_update after the first call (30 seconds). */
@@ -145,6 +145,11 @@ APP_TIMER_DEF(m_temp_send_timer_id);
 APP_TIMER_DEF(m_led_timer_id);
 
 BLE_SENSOR_DEF(m_sensor);
+
+#define RSSI_CHANGE_THRESHOLD 1
+#define RSSI_CHANGE_SKIP 1
+
+int8_t last_rssi;
 
 static uint16_t m_conn_handle = BLE_CONN_HANDLE_INVALID; /**< Handle of the current connection. */
 
@@ -561,6 +566,9 @@ static void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context) {
         m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
         err_code      = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
         APP_ERROR_CHECK(err_code);
+        err_code = sd_ble_gap_rssi_start(p_ble_evt->evt.gap_evt.conn_handle,
+                                         RSSI_CHANGE_THRESHOLD, RSSI_CHANGE_SKIP);
+        APP_ERROR_CHECK(err_code);
         break;
 
     case BLE_GAP_EVT_DISCONNECTED:
@@ -616,6 +624,12 @@ static void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context) {
                      *((uint8_t*)&p_ble_evt->evt.gap_evt.params.auth_status.kdist_own),
                      *((uint8_t*)&p_ble_evt->evt.gap_evt.params.auth_status.kdist_peer));
         break;
+
+    case BLE_GAP_EVT_RSSI_CHANGED: {
+        int8_t rssi = p_ble_evt->evt.gap_evt.params.rssi_changed.rssi;
+        last_rssi = rssi;
+        NRF_LOG_DEBUG("rssi %d", rssi);
+    } break;
 
     default:
         // No implementation needed.
