@@ -70,19 +70,19 @@
 #include "nrf_pwr_mgmt.h"
 #include "nrf_delay.h"
 #include "nrf_gpio.h"
+#include "nrf_ble_scan.h"
 
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
 #include "ble_sensor.h"
-#include "utility/onewire.h"
-#include "utility/hires.h"
-#include "ow_temp/ow_temp.h"
+#include "uuid_util.h"
+#include "mjparser/mjparser.h"
 
 #define DEVICE_NAME "Can has bluetooth?"        /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME "NordicSemiconductor" /**< Manufacturer. Will be passed to Device Information Service. */
-#define APP_ADV_INTERVAL 798                   /**< The advertising interval (in units of 0.625 ms.). */
+#define APP_ADV_INTERVAL 798                    /**< The advertising interval (in units of 0.625 ms.). */
 
 #define APP_ADV_DURATION 0
 
@@ -94,9 +94,11 @@
 #define LED_OFF_INTERVAL APP_TIMER_TICKS(9900)
 #define LED_ON_INTERVAL APP_TIMER_TICKS(100)
 
+#define HELLO_INTERVAL APP_TIMER_TICKS(10000)
+
 #define MIN_CONN_INTERVAL MSEC_TO_UNITS(200, UNIT_1_25_MS) /**< Minimum acceptable connection interval (0.4 seconds). */
 #define MAX_CONN_INTERVAL MSEC_TO_UNITS(200, UNIT_1_25_MS) /**< Maximum acceptable connection interval (0.65 second). */
-#define SLAVE_LATENCY 10                                    /**< Slave latency. */
+#define SLAVE_LATENCY 10                                   /**< Slave latency. */
 #define CONN_SUP_TIMEOUT MSEC_TO_UNITS(14000, UNIT_10_MS)  /**< Connection supervisory timeout (14 seconds). */
 
 #define FIRST_CONN_PARAMS_UPDATE_DELAY APP_TIMER_TICKS(1000) /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
@@ -119,50 +121,26 @@
 #define LED_BLUE LED2_B
 #define LED_RED LED2_R
 
-#define ONEWIRE_DQ_PIN 29
-#define ONEWIRE_PWR_PIN NRF_GPIO_PIN_MAP(0, 2)
-
-APP_TIMER_DEF(m_onewire_timer_id);
-oo_temp_reader_t ow_temp1;
-
-#define ONEWIRE_DQ_PIN2 15
-#define ONEWIRE_PWR_PIN2 NRF_GPIO_PIN_MAP(0, 13)
-APP_TIMER_DEF(m_onewire2_timer_id);
-oo_temp_reader_t ow_temp2;
-
-#define ONEWIRE_DQ_PIN3 20
-#define ONEWIRE_PWR_PIN3 NRF_GPIO_PIN_MAP(0, 17)
-APP_TIMER_DEF(m_onewire3_timer_id);
-oo_temp_reader_t ow_temp3;
-
-#define SENSORS_READ_TIME APP_TIMER_TICKS(1000)
-
 NRF_BLE_GATT_DEF(m_gatt);           /**< GATT module instance. */
 NRF_BLE_QWR_DEF(m_qwr);             /**< Context for the Queued Write module.*/
 BLE_ADVERTISING_DEF(m_advertising); /**< Advertising module instance. */
-APP_TIMER_DEF(m_temp_timer_id);
-APP_TIMER_DEF(m_temp_send_timer_id);
 APP_TIMER_DEF(m_led_timer_id);
+APP_TIMER_DEF(m_hello_timer_id);
 
 BLE_SENSOR_DEF(m_sensor);
 
-#define RSSI_CHANGE_THRESHOLD 1
-#define RSSI_CHANGE_SKIP 1
-
-int8_t last_rssi;
+NRF_BLE_SCAN_DEF(m_scan); /**< Scanning Module instance. */
 
 static uint16_t m_conn_handle = BLE_CONN_HANDLE_INVALID; /**< Handle of the current connection. */
 
-SensorMessage sensor_meas      = SensorMessage_init_zero;
-SensorMessage sensor_meas_zero = SensorMessage_init_zero;
-
 static ble_uuid_t m_adv_uuids[] = /**< Universally unique service identifiers. */
-{
+    {
         {BLE_UUID_BATTERY_SERVICE, BLE_UUID_TYPE_BLE},
-        {BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}
-};
+        {BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}};
 
 uint32_t led_state = 0;
+
+int8_t last_rssi = 0;
 
 /**@brief Callback function for asserts in the SoftDevice.
  *
@@ -258,46 +236,6 @@ static void pm_evt_handler(pm_evt_t const* p_evt) {
     }
 }
 
-static void temperature_update(ow_temp_reading_t* reading) {
-
-    int i                               = sensor_meas.Readings_count;
-    sensor_meas.Readings[i].Temperature = reading->temperature;
-    memcpy(sensor_meas.Readings[i].Id,
-           reading->serial.id,
-           ID_SIZE); // C does not have a sane way of getting a struct members size.
-    sensor_meas.Readings_count++;
-
-    NRF_LOG_INFO("temp1 %d", reading->temperature);
-    NRF_LOG_INFO("Serial %02x:%02x:%02x:%02x:%02x:%02x ",
-                 reading->serial.id[0], reading->serial.id[1], reading->serial.id[2],
-                 reading->serial.id[3], reading->serial.id[4], reading->serial.id[5]);
-}
-
-static void readings_send(void* p_context) {
-    ret_code_t err_code;
-    sensor_meas.rssi = last_rssi;
-    err_code = ble_sensor_measurement_send(&m_sensor, &sensor_meas);
-    if ((err_code != NRF_SUCCESS) &&
-        (err_code != NRF_ERROR_INVALID_STATE) &&
-        (err_code != NRF_ERROR_RESOURCES) &&
-        (err_code != NRF_ERROR_BUSY) &&
-        (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING) &&
-        (err_code != NRF_ERROR_FORBIDDEN)) {
-        APP_ERROR_HANDLER(err_code);
-    }
-    sensor_meas = sensor_meas_zero;
-}
-
-static void temperature_meas_timeout_handler(void* p_context) {
-    ret_code_t err_code;
-    UNUSED_PARAMETER(p_context);
-    read_one_wire_temp(&ow_temp1, temperature_update);
-    read_one_wire_temp(&ow_temp2, temperature_update);
-    read_one_wire_temp(&ow_temp3, temperature_update);
-    err_code = app_timer_start(m_temp_send_timer_id, SENSORS_READ_TIME, NULL);
-    APP_ERROR_CHECK(err_code);
-}
-
 static void led_timeout_handler(void* p_context) {
     ret_code_t err_code;
     UNUSED_PARAMETER(p_context);
@@ -319,6 +257,22 @@ static void led_timeout_handler(void* p_context) {
     }
 }
 
+static void hello_timeout_handler(void* p_context) {
+    SensorMessage msg = SensorMessage_init_zero;
+    msg.rssi          = last_rssi;
+
+    ret_code_t err_code;
+    err_code = ble_sensor_measurement_send(&m_sensor, &msg);
+    if ((err_code != NRF_SUCCESS) &&
+        (err_code != NRF_ERROR_INVALID_STATE) &&
+        (err_code != NRF_ERROR_RESOURCES) &&
+        (err_code != NRF_ERROR_BUSY) &&
+        (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING) &&
+        (err_code != NRF_ERROR_FORBIDDEN)) {
+        APP_ERROR_HANDLER(err_code);
+    }
+}
+
 /**@brief Function for the Timer initialization.
  *
  * @details Initializes the timer module. This creates and starts application timers.
@@ -331,17 +285,15 @@ static void timers_init(void) {
     APP_ERROR_CHECK(err_code);
 
     // Create timers.
-    err_code = app_timer_create(&m_temp_timer_id,
+
+    err_code = app_timer_create(&m_hello_timer_id,
                                 APP_TIMER_MODE_REPEATED,
-                                temperature_meas_timeout_handler);
+                                hello_timeout_handler);
 
     err_code = app_timer_create(&m_led_timer_id,
                                 APP_TIMER_MODE_SINGLE_SHOT,
                                 led_timeout_handler);
 
-    err_code = app_timer_create(&m_temp_send_timer_id,
-                                APP_TIMER_MODE_SINGLE_SHOT,
-                                readings_send);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -446,8 +398,7 @@ static void services_init(void) {
 static void application_timers_start(void) {
     ret_code_t err_code;
 
-    // Start application timers.
-    err_code = app_timer_start(m_temp_timer_id, TEMPERATURE_MEAS_INTERVAL, NULL);
+    err_code = app_timer_start(m_hello_timer_id, HELLO_INTERVAL, NULL);
     APP_ERROR_CHECK(err_code);
 
     err_code = app_timer_start(m_led_timer_id, LED_OFF_INTERVAL, NULL);
@@ -557,7 +508,8 @@ static void on_adv_evt(ble_adv_evt_t ble_adv_evt) {
  * @param[in]   p_context   Unused.
  */
 static void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context) {
-    ret_code_t err_code;
+    ret_code_t           err_code;
+    ble_gap_evt_t const* p_gap_evt = &p_ble_evt->evt.gap_evt;
 
     switch (p_ble_evt->header.evt_id) {
     case BLE_GAP_EVT_CONNECTED:
@@ -567,13 +519,10 @@ static void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context) {
         m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
         err_code      = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
         APP_ERROR_CHECK(err_code);
-        err_code = sd_ble_gap_rssi_start(p_ble_evt->evt.gap_evt.conn_handle,
-                                         RSSI_CHANGE_THRESHOLD, RSSI_CHANGE_SKIP);
-        APP_ERROR_CHECK(err_code);
         break;
 
     case BLE_GAP_EVT_DISCONNECTED:
-        NRF_LOG_INFO("Disconnected, reason 0x%x.",
+        NRF_LOG_INFO("Disconnected, reason %d.",
                      p_ble_evt->evt.gap_evt.params.disconnected.reason);
         m_conn_handle = BLE_CONN_HANDLE_INVALID;
         break;
@@ -626,12 +575,43 @@ static void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context) {
                      *((uint8_t*)&p_ble_evt->evt.gap_evt.params.auth_status.kdist_peer));
         break;
 
+    case BLE_GAP_EVT_ADV_REPORT: {
+        const ble_gap_evt_adv_report_t* report           = &p_gap_evt->params.adv_report;
+        uint16_t                        service_data_off = 0;
+        uint16_t                        service_data_len = ble_advdata_service_data_uuid_find(report->data.p_data,
+                                                                       report->data.len,
+                                                                       &service_data_off,
+                                                                       &mj_uuid);
+        if (service_data_len != 0) {
+            NRF_LOG_DEBUG("Found mijia")
+            uint8_t*      data = &report->data.p_data[service_data_off];
+            SensorMessage msg  = SensorMessage_init_zero;
+            msg.rssi           = last_rssi;
+
+            bool ok = mj_parse_to_msg(data, service_data_len, &msg);
+            if (!ok) {
+                return;
+            }
+            NRF_LOG_INFO("rssi %d", report->rssi);
+            msg.ProxyCentral.rssi = report->rssi;
+            memcpy(msg.ProxyCentral.RemoteId, report->peer_addr.addr, BLE_GAP_ADDR_LEN);
+            msg.has_ProxyCentral = true;
+            ret_code_t err_code;
+            err_code = ble_sensor_measurement_send(&m_sensor, &msg);
+            if ((err_code != NRF_SUCCESS) &&
+                (err_code != NRF_ERROR_INVALID_STATE) &&
+                (err_code != NRF_ERROR_RESOURCES) &&
+                (err_code != NRF_ERROR_BUSY) &&
+                (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING) &&
+                (err_code != NRF_ERROR_FORBIDDEN)) {
+                APP_ERROR_HANDLER(err_code);
+            }
+        }
+    } break;
     case BLE_GAP_EVT_RSSI_CHANGED: {
         int8_t rssi = p_ble_evt->evt.gap_evt.params.rssi_changed.rssi;
-        last_rssi = rssi;
-        NRF_LOG_DEBUG("rssi %d", rssi);
+        last_rssi   = rssi;
     } break;
-
     default:
         // No implementation needed.
         break;
@@ -735,15 +715,16 @@ static void advertising_init(void) {
     memset(&init, 0, sizeof(init));
 
     init.advdata.name_type               = BLE_ADVDATA_FULL_NAME;
+    init.advdata.include_appearance      = true;
     init.advdata.flags                   = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
     init.advdata.uuids_complete.uuid_cnt = sizeof(m_adv_uuids) / sizeof(m_adv_uuids[0]);
     init.advdata.uuids_complete.p_uuids  = m_adv_uuids;
 
-    init.config.ble_adv_fast_enabled  = true;
-    init.config.ble_adv_fast_interval = APP_ADV_INTERVAL;
-    init.config.ble_adv_fast_timeout  = APP_ADV_DURATION;
-    init.config.ble_adv_primary_phy   = BLE_GAP_PHY_CODED;
-    init.config.ble_adv_secondary_phy = BLE_GAP_PHY_CODED;
+    init.config.ble_adv_fast_enabled      = true;
+    init.config.ble_adv_fast_interval     = APP_ADV_INTERVAL;
+    init.config.ble_adv_fast_timeout      = APP_ADV_DURATION;
+    init.config.ble_adv_primary_phy       = BLE_GAP_PHY_CODED;
+    init.config.ble_adv_secondary_phy     = BLE_GAP_PHY_CODED;
     init.config.ble_adv_extended_enabled  = true;
     init.config.ble_adv_whitelist_enabled = true;
 
@@ -853,6 +834,41 @@ static void tx_power_set(void) {
     APP_ERROR_CHECK(err_code);
 }
 
+static ble_gap_scan_params_t m_scan_param = /**< Scan parameters requested for scanning and connection. */
+    {
+        .active        = 0,
+        .interval      = NRF_BLE_SCAN_SCAN_INTERVAL,
+        .window        = NRF_BLE_SCAN_SCAN_WINDOW,
+        .filter_policy = BLE_GAP_SCAN_FP_ACCEPT_ALL,
+        .timeout       = NRF_BLE_SCAN_SCAN_DURATION,
+        .scan_phys     = BLE_GAP_PHY_CODED | BLE_GAP_PHY_1MBPS,
+        .extended      = true,
+};
+
+/**@brief Function for initializing the scanning and setting the filters.
+ */
+static void scan_init(nrf_ble_scan_t* const p_scan_ctx, bool connect) {
+    ret_code_t          err_code;
+    nrf_ble_scan_init_t init_scan;
+
+    memset(&init_scan, 0, sizeof(init_scan));
+
+    init_scan.connect_if_match = connect;
+    init_scan.conn_cfg_tag     = APP_BLE_CONN_CFG_TAG;
+    init_scan.p_scan_param     = &m_scan_param;
+
+    err_code = nrf_ble_scan_init(p_scan_ctx, &init_scan, NULL);
+    APP_ERROR_CHECK(err_code);
+}
+
+static void scan_start(nrf_ble_scan_t* const p_scan_ctx) {
+    ret_code_t ret;
+
+    NRF_LOG_INFO("Start scanning.");
+    ret = nrf_ble_scan_start(p_scan_ctx);
+    APP_ERROR_CHECK(ret);
+}
+
 /**@brief Function for application main entry.
  */
 int main(void) {
@@ -880,16 +896,15 @@ int main(void) {
     conn_params_init();
     peer_manager_init();
     tx_power_set();
-
-    one_wire_init(&ow_temp1, m_onewire_timer_id, ONEWIRE_DQ_PIN, ONEWIRE_PWR_PIN);
-    one_wire_init(&ow_temp2, m_onewire2_timer_id, ONEWIRE_DQ_PIN2, ONEWIRE_PWR_PIN2);
-    one_wire_init(&ow_temp3, m_onewire3_timer_id, ONEWIRE_DQ_PIN3, ONEWIRE_PWR_PIN3);
+    scan_init(&m_scan, false);
 
     // Start execution.
     NRF_LOG_INFO("Sensor thing started.");
     application_timers_start();
     advertising_start(erase_bonds);
     NRF_LOG_INFO("Advertising started.");
+
+    scan_start(&m_scan);
 
     // Enter main loop.
     for (;;) {

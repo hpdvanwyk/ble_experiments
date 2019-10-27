@@ -106,7 +106,12 @@ var TemperatureOpts = prometheus.GaugeOpts{
 
 var RssiOpts = prometheus.GaugeOpts{
 	Name: "ble_rssi_db",
-	Help: "Rssi of remote ble device.",
+	Help: "Rssi of ble device.",
+}
+
+var RemoteRssiOpts = prometheus.GaugeOpts{
+	Name: "ble_remote_rssi_db",
+	Help: "Rssi seen on remote ble device.",
 }
 
 var HumidityOpts = prometheus.GaugeOpts{
@@ -153,6 +158,7 @@ func (s *SensorExporter) Run() {
 	for {
 		select {
 		case msg := <-s.MsgChan:
+			central := msg.Central
 			s.updateMetric(
 				float64(msg.Central.Rssi),
 				&RssiOpts,
@@ -161,6 +167,25 @@ func (s *SensorExporter) Run() {
 			)
 
 			fmt.Printf("rssi: %v dB\ndevice id: %v\n", msg.Central.Rssi, IdString(msg.Central.RemoteId))
+			if msg.Sensor.Rssi != 0 {
+				s.updateMetric(
+					float64(msg.Sensor.Rssi),
+					&RemoteRssiOpts,
+					s.expiryTime,
+					&label{"remoteid", IdString(msg.Central.RemoteId)},
+				)
+			}
+
+			if msg.Sensor.ProxyCentral != nil {
+				central = msg.Sensor.ProxyCentral
+				s.updateMetric(
+					float64(central.Rssi),
+					&RssiOpts,
+					s.expiryTime,
+					&label{"remoteid", IdString(central.RemoteId)},
+					&label{"proxyid", IdString(msg.Central.RemoteId)},
+				)
+			}
 			for i := range msg.Sensor.Readings {
 				fmt.Printf("id: %v\nTemperature: %v C\n",
 					IdString(msg.Sensor.Readings[i].Id),
@@ -170,7 +195,7 @@ func (s *SensorExporter) Run() {
 					float64(msg.Sensor.Readings[i].Temperature)/10,
 					&TemperatureOpts,
 					s.expiryTime,
-					&label{"remoteid", IdString(msg.Central.RemoteId)},
+					&label{"remoteid", IdString(central.RemoteId)},
 					&label{"sensorid", IdString(msg.Sensor.Readings[i].Id)},
 				)
 			}
@@ -181,7 +206,7 @@ func (s *SensorExporter) Run() {
 						float64(r.Temperature)/10,
 						&TemperatureOpts,
 						1*time.Minute,
-						&label{"remoteid", IdString(msg.Central.RemoteId)},
+						&label{"remoteid", IdString(central.RemoteId)},
 						&label{"sensorid", "0"},
 					)
 				}
@@ -190,7 +215,7 @@ func (s *SensorExporter) Run() {
 						float64(r.Humidity)/10,
 						&HumidityOpts,
 						1*time.Minute,
-						&label{"remoteid", IdString(msg.Central.RemoteId)},
+						&label{"remoteid", IdString(central.RemoteId)},
 						&label{"sensorid", "0"},
 					)
 				}
@@ -199,7 +224,7 @@ func (s *SensorExporter) Run() {
 						float64(r.Battery),
 						&BatteryOpts,
 						5*time.Minute,
-						&label{"remoteid", IdString(msg.Central.RemoteId)},
+						&label{"remoteid", IdString(central.RemoteId)},
 					)
 				}
 			}

@@ -11,6 +11,9 @@
 		},
 		{
 			"path": "ble_experiment_exporter"
+		},
+		{
+			"path": "ble_sensor_proxy"
 		}
 	],
 	"settings": {
@@ -30,7 +33,10 @@
 			"sensorsim.h": "c",
 			"pb.h": "c",
 			"oo_temp.h": "c",
-			"app_timer.h": "c"
+			"app_timer.h": "c",
+			"app_button.h": "c",
+			"mjparser.h": "c",
+			"nrf_ble_scan.h": "c"
 		}
 	}
 }

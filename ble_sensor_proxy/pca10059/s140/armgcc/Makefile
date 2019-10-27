@@ -1,4 +1,4 @@
-PROJECT_NAME     := ble_sensor_central_pca10059_s140
+PROJECT_NAME     := ble_sensor_coded_pca10059_s140
 TARGETS          := nrf52840_xxaa
 OUTPUT_DIRECTORY := _build
 
@@ -6,10 +6,10 @@ GNU_INSTALL_ROOT := /home/hendrik/bin/gcc-arm-none-eabi-8-2018-q4-major/bin/
 SDK_ROOT := /home/hendrik/bin/nRF5_SDK_15.3.0_59ac345
 PROJ_DIR := ../../..
 
-BLACKMAGIC_TARGET := 192.168.0.12:2002
+BLACKMAGIC_TARGET := 192.168.0.12:2000
 
 $(OUTPUT_DIRECTORY)/nrf52840_xxaa.out: \
-  LINKER_SCRIPT  := ble_sensor_central_gcc_nrf52.ld
+  LINKER_SCRIPT  := ble_sensor_coded_gcc_nrf52.ld
 
 # Source files common to all targets
 SRC_FILES += \
@@ -78,7 +78,6 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_rng.c \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_shared.c \
   $(PROJ_DIR)/main.c \
-  $(PROJ_DIR)/ble_sensor_c.c \
   $(SDK_ROOT)/components/softdevice/common/nrf_sdh.c \
   $(SDK_ROOT)/components/softdevice/common/nrf_sdh_ble.c \
   $(SDK_ROOT)/components/softdevice/common/nrf_sdh_soc.c \
@@ -87,14 +86,15 @@ SRC_FILES += \
   $(SDK_ROOT)/components/ble/peer_manager/auth_status_tracker.c \
   $(SDK_ROOT)/components/ble/common/ble_advdata.c \
   $(SDK_ROOT)/components/ble/ble_advertising/ble_advertising.c \
+  $(SDK_ROOT)/components/ble/common/ble_conn_params.c \
   $(SDK_ROOT)/components/ble/common/ble_conn_state.c \
-  $(SDK_ROOT)/components/ble/ble_db_discovery/ble_db_discovery.c \
   $(SDK_ROOT)/components/ble/common/ble_srv_common.c \
   $(SDK_ROOT)/components/ble/peer_manager/gatt_cache_manager.c \
   $(SDK_ROOT)/components/ble/peer_manager/gatts_cache_manager.c \
   $(SDK_ROOT)/components/ble/peer_manager/id_manager.c \
   $(SDK_ROOT)/components/ble/nrf_ble_gatt/nrf_ble_gatt.c \
   $(SDK_ROOT)/components/ble/peer_manager/nrf_ble_lesc.c \
+  $(SDK_ROOT)/components/ble/nrf_ble_qwr/nrf_ble_qwr.c \
   $(SDK_ROOT)/components/ble/peer_manager/peer_data_storage.c \
   $(SDK_ROOT)/components/ble/peer_manager/peer_database.c \
   $(SDK_ROOT)/components/ble/peer_manager/peer_id.c \
@@ -103,7 +103,6 @@ SRC_FILES += \
   $(SDK_ROOT)/components/ble/peer_manager/pm_buffer.c \
   $(SDK_ROOT)/components/ble/peer_manager/security_dispatcher.c \
   $(SDK_ROOT)/components/ble/peer_manager/security_manager.c \
-  $(SDK_ROOT)/components/ble/nrf_ble_scan/nrf_ble_scan.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_aes.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_aes_aead.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_chacha_poly_aead.c \
@@ -118,6 +117,7 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_rng.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_shared.c \
   $(SDK_ROOT)/external/utf_converter/utf.c \
+  $(SDK_ROOT)/components/ble/ble_services/ble_dis/ble_dis.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_Syscalls_GCC.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_printf.c \
@@ -128,23 +128,14 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_eddsa.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_hash.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_hmac.c \
-  $(SDK_ROOT)/components/libraries/usbd/app_usbd.c \
-  $(SDK_ROOT)/components/libraries/usbd/class/cdc/acm/app_usbd_cdc_acm.c \
-  $(SDK_ROOT)/components/libraries/usbd/app_usbd_core.c \
-  $(SDK_ROOT)/components/libraries/usbd/app_usbd_serial_num.c \
-  $(SDK_ROOT)/components/libraries/usbd/app_usbd_string_desc.c \
-  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_usbd.c \
-  $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_power.c \
-  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_systick.c \
-  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_power.c \
+  $(SDK_ROOT)/components/ble/nrf_ble_scan/nrf_ble_scan.c \
   $(PROJ_DIR)/../ble_sensor_coded/nanopb/pb_encode.c \
   $(PROJ_DIR)/../ble_sensor_coded/nanopb/pb_decode.c \
   $(PROJ_DIR)/../ble_sensor_coded/nanopb/pb_common.c \
   $(PROJ_DIR)/../ble_sensor_coded/pb/sensor.pb.c \
-  $(PROJ_DIR)/mjparser/mjparser.c \
-  $(PROJ_DIR)/usb.c \
-  $(PROJ_DIR)/uuid_util.c \
-  $(PROJ_DIR)/pb_usb/pb_usb.c \
+  $(PROJ_DIR)/../ble_app_sensor_central/mjparser/mjparser.c \
+  $(PROJ_DIR)/../ble_sensor_coded/ble_sensor.c \
+  $(PROJ_DIR)/../ble_app_sensor_central/uuid_util.c \
 
 # Include folders common to all targets
 INC_FOLDERS += \
@@ -191,7 +182,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/ble/ble_services/ble_lls \
   $(SDK_ROOT)/components/libraries/bsp \
   $(SDK_ROOT)/components/libraries/crypto/backend/nrf_hw \
-  $(SDK_ROOT)/components/ble/ble_db_discovery \
   $(SDK_ROOT)/components/nfc/ndef/connection_handover/ac_rec \
   $(SDK_ROOT)/components/ble/ble_services/ble_bas \
   $(SDK_ROOT)/components/libraries/mpu \
@@ -208,7 +198,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/ble/ble_services/ble_ias \
   $(SDK_ROOT)/components/libraries/usbd/class/hid/mouse \
   $(SDK_ROOT)/components/libraries/ecc \
-  $(SDK_ROOT)/components/ble/nrf_ble_scan \
   $(SDK_ROOT)/components/libraries/low_power_pwm \
   $(SDK_ROOT)/components/nfc/ndef/conn_hand_parser/ble_oob_advdata_parser \
   $(SDK_ROOT)/components/ble/ble_services/ble_dfu \
@@ -219,8 +208,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/external/nrf_cc310/include \
   $(SDK_ROOT)/components/libraries/scheduler \
   $(SDK_ROOT)/components/libraries/cli \
-  $(SDK_ROOT)/components/ble/ble_services/ble_lbs \
-  $(SDK_ROOT)/components/ble/ble_services/ble_hts \
   $(SDK_ROOT)/components/libraries/crc16 \
   $(SDK_ROOT)/components/nfc/t4t_parser/apdu \
   $(SDK_ROOT)/components/libraries/util \
@@ -244,7 +231,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/nfc/t4t_lib \
   $(SDK_ROOT)/components/nfc/ndef/parser/record \
   $(SDK_ROOT)/modules/nrfx/mdk \
-  $(SDK_ROOT)/components/ble/ble_services/ble_cts_c \
   $(SDK_ROOT)/external/nrf_tls/mbedtls/nrf_crypto/config \
   $(SDK_ROOT)/components/ble/ble_services/ble_nus \
   $(SDK_ROOT)/components/libraries/twi_mngr \
@@ -256,6 +242,7 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/nfc/ndef/connection_handover/ble_pair_msg \
   $(SDK_ROOT)/components/libraries/crypto/backend/optiga \
   $(SDK_ROOT)/components/libraries/usbd/class/audio \
+  $(SDK_ROOT)/components/libraries/sensorsim \
   $(SDK_ROOT)/components/libraries/crypto/backend/nrf_sw \
   $(SDK_ROOT)/components/ble/peer_manager \
   $(SDK_ROOT)/components/libraries/mem_manager \
@@ -293,14 +280,13 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/nfc/ndef/conn_hand_parser/ac_rec_parser \
   $(SDK_ROOT)/components/libraries/stack_guard \
   $(SDK_ROOT)/components/libraries/log/src \
-  $(SDK_ROOT)/components/libraries/usbd/class/cdc \
-  $(SDK_ROOT)/components/libraries/usbd \
-  $(SDK_ROOT)/components/libraries/usbd/class/cdc/acm \
+  $(SDK_ROOT)/components/ble/nrf_ble_scan \
   $(PROJ_DIR) \
   $(PROJ_DIR)/../ble_sensor_coded \
-  $(PROJ_DIR)/../ble_sensor_coded/utility/ \
   $(PROJ_DIR)/../ble_sensor_coded/pb/ \
   $(PROJ_DIR)/../ble_sensor_coded/nanopb/ \
+  $(PROJ_DIR)/../ble_sensor_coded/ \
+  $(PROJ_DIR)/../ble_app_sensor_central/ \
 
 # Libraries common to all targets
 LIB_FILES += \
@@ -315,8 +301,8 @@ OPT = -O3 -g3
 # C flags common to all targets
 CFLAGS += $(OPT)
 CFLAGS += -DBLE_STACK_SUPPORT_REQD
-CFLAGS += -DCUSTOM_BOARD_INC=pca100593v3
-CFLAGS += -DBOARD_PCA100593v3
+CFLAGS += -DCUSTOM_BOARD_INC=pca10059sensor
+CFLAGS += -DBOARD_PCA10059sensor
 CFLAGS += -DCONFIG_GPIO_AS_PINRESET
 CFLAGS += -DFLOAT_ABI_HARD
 CFLAGS += -DMBEDTLS_CONFIG_FILE=\"nrf_crypto_mbedtls_config.h\"
@@ -324,7 +310,6 @@ CFLAGS += -DNRF52840_XXAA
 CFLAGS += -DNRF_CRYPTO_MAX_INSTANCE_COUNT=1
 CFLAGS += -DNRF_SD_BLE_API_VERSION=6
 CFLAGS += -DS140
-CFLAGS += -DDEBUG
 CFLAGS += -DSOFTDEVICE_PRESENT
 CFLAGS += -DSWI_DISABLE0
 CFLAGS += -mcpu=cortex-m4
@@ -334,6 +319,14 @@ CFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
 # keep every function in a separate section, this allows linker to discard unused ones
 CFLAGS += -ffunction-sections -fdata-sections -fno-strict-aliasing
 CFLAGS += -fno-builtin -fshort-enums
+CFLAGS += -DDEBUG
+CFLAGS += -DNRF_LOG_ENABLED=1
+
+# allow more flags so that you can do make MORECFLAGS="-DNRF_LOG_ENABLED=1 -DDEBUG"
+MORECFLAGS=
+CFLAGS += $(MORECFLAGS)
+
+
 
 # C++ flags common to all targets
 CXXFLAGS += $(OPT)
@@ -343,8 +336,8 @@ ASMFLAGS += -g3
 ASMFLAGS += -mcpu=cortex-m4
 ASMFLAGS += -mthumb -mabi=aapcs
 ASMFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
-ASMFLAGS += -DCUSTOM_BOARD_INC=pca100593v3
-ASMFLAGS += -DBOARD_PCA100593v3
+ASMFLAGS += -DBLE_STACK_SUPPORT_REQD
+ASMFLAGS += -DBOARD_PCA10059
 ASMFLAGS += -DCONFIG_GPIO_AS_PINRESET
 ASMFLAGS += -DFLOAT_ABI_HARD
 ASMFLAGS += -DNRF52840_XXAA
@@ -429,3 +422,6 @@ blackmagicflash: hex
 	-ex 'compare-sections' \
 	-ex 'kill' \
 	$(OUTPUT_DIRECTORY)/nrf52840_xxaa_s140.hex
+
+proto:
+	cd $(PROJ_DIR)/pb&&make

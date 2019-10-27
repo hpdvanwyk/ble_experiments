@@ -69,6 +69,7 @@
 #include "mjparser/mjparser.h"
 #include "ble_sensor_c.h"
 #include "usb.h"
+#include "uuid_util.h"
 #include "pb_usb/pb_usb.h"
 
 #define APP_BLE_CONN_CFG_TAG 1  /**< Tag that refers to the BLE stack configuration that is set with @ref sd_ble_cfg_set. The default tag is @ref APP_BLE_CONN_CFG_TAG. */
@@ -226,52 +227,6 @@ static void sensor_c_evt_handler(ble_sensor_c_t* p_sensor_c, ble_sensor_c_evt_t*
         // No implementation needed.
         break;
     }
-}
-
-#define UUID128_SIZE 16 /**< Size of 128 bit UUID. */
-#define UUID16_SIZE 2   /**< Size of 16 bit UUID. */
-uint16_t ble_advdata_service_data_uuid_find(uint8_t const*    p_encoded_data,
-                                            uint16_t          data_len,
-                                            uint16_t*         p_offset,
-                                            ble_uuid_t const* p_target_uuid) {
-
-    ret_code_t     err_code;
-    uint16_t       data_offset  = 0;
-    uint8_t        raw_uuid_len = UUID128_SIZE;
-    uint8_t const* p_parsed_uuid;
-    uint8_t        raw_uuid[UUID128_SIZE];
-    uint16_t       parsed_data_len;
-
-    err_code = sd_ble_uuid_encode(p_target_uuid, &raw_uuid_len, raw_uuid);
-
-    if ((p_encoded_data == NULL) || (err_code != NRF_SUCCESS)) {
-        // Invalid p_encoded_data or p_target_uuid.
-        return 0;
-    }
-
-    switch (raw_uuid_len) {
-    case UUID16_SIZE:
-        break;
-
-    default:
-        return 0;
-    }
-
-    parsed_data_len = ble_advdata_search(p_encoded_data, data_len, &data_offset, BLE_GAP_AD_TYPE_SERVICE_DATA);
-
-    if (data_offset == 0) {
-        // Could not find any relevant UUIDs in the encoded data.
-        return 0;
-    }
-
-    p_parsed_uuid = &p_encoded_data[data_offset];
-
-    // Verify if any UUID matches the given UUID.
-    if (memcmp(p_parsed_uuid, raw_uuid, raw_uuid_len) == 0) {
-        *p_offset = data_offset + raw_uuid_len;
-        return parsed_data_len - raw_uuid_len;
-    }
-    return 0;
 }
 
 /**@brief Function for handling BLE events.
