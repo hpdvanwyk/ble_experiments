@@ -69,10 +69,6 @@ extern "C" {
                           BLE_SENSOR_C_BLE_OBSERVER_PRIO, \
                           ble_sensor_c_on_ble_evt, &_name, _cnt)
 
-#ifndef BLE_SENSOR_C_RR_INTERVALS_MAX_CNT
-#define BLE_SENSOR_C_RR_INTERVALS_MAX_CNT 20
-#endif
-
 typedef enum {
     BLE_SENSOR_C_EVT_DISCOVERY_COMPLETE = 1,
     BLE_SENSOR_C_EVT_SENSOR_NOTIFICATION

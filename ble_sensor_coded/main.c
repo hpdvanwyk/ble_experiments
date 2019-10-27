@@ -84,8 +84,7 @@
 #define MANUFACTURER_NAME "NordicSemiconductor" /**< Manufacturer. Will be passed to Device Information Service. */
 #define APP_ADV_INTERVAL 1223                   /**< The advertising interval (in units of 0.625 ms. This value corresponds to 187.5 ms). */
 
-//#define APP_ADV_DURATION                    18000                                   /**< The advertising duration (180 seconds) in units of 10 milliseconds. */
-#define APP_ADV_DURATION 0 /**< The advertising duration (180 seconds) in units of 10 milliseconds. */
+#define APP_ADV_DURATION 0
 
 #define APP_BLE_CONN_CFG_TAG 1  /**< A tag identifying the SoftDevice BLE configuration. */
 #define APP_BLE_OBSERVER_PRIO 3 /**< Application's BLE observer priority. You shouldn't need to modify this value. */
@@ -153,10 +152,9 @@ SensorMessage sensor_meas = SensorMessage_init_zero;
 SensorMessage sensor_meas_zero = SensorMessage_init_zero;
 
 static ble_uuid_t m_adv_uuids[] = /**< Universally unique service identifiers. */
-    {
+{
         {BLE_UUID_BATTERY_SERVICE, BLE_UUID_TYPE_BLE},
         {BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}
-        //    {BLE_UUID_OUR_SERVICE, BLE_UUID_TYPE_VENDOR_BEGIN}
 };
 
 uint32_t led_state = 0;
@@ -257,11 +255,11 @@ static void pm_evt_handler(pm_evt_t const* p_evt) {
 
 static void temperature_update(ow_temp_reading_t* reading) {
 
-    int i = sensor_meas.Readings_count;
+    int i                               = sensor_meas.Readings_count;
     sensor_meas.Readings[i].Temperature = reading->temperature;
-    memcpy (sensor_meas.Readings[i].Id,
-        reading->serial.id,
-        ID_SIZE); // C does not have a sane way of getting a struct members size.
+    memcpy(sensor_meas.Readings[i].Id,
+           reading->serial.id,
+           ID_SIZE); // C does not have a sane way of getting a struct members size.
     sensor_meas.Readings_count++;
 
     NRF_LOG_INFO("temp1 %d", reading->temperature);
@@ -407,7 +405,7 @@ static void nrf_qwr_error_handler(uint32_t nrf_error) {
 static void services_init(void) {
     ret_code_t         err_code;
     ble_dis_init_t     dis_init;
-    ble_sensor_init_t      sensor_init;
+    ble_sensor_init_t  sensor_init;
     nrf_ble_qwr_init_t qwr_init = {0};
 
     // Initialize Queued Write Module.
@@ -429,7 +427,7 @@ static void services_init(void) {
     // Initialize Temperature Service.
     memset(&sensor_init, 0, sizeof(sensor_init));
 
-    sensor_init.evt_handler                 = NULL;
+    sensor_init.evt_handler = NULL;
 
     sensor_init.ht_meas_cccd_wr_sec = SEC_JUST_WORKS;
 
@@ -566,7 +564,7 @@ static void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context) {
         break;
 
     case BLE_GAP_EVT_DISCONNECTED:
-        NRF_LOG_INFO("Disconnected, reason %d.",
+        NRF_LOG_INFO("Disconnected, reason 0x%x.",
                      p_ble_evt->evt.gap_evt.params.disconnected.reason);
         m_conn_handle = BLE_CONN_HANDLE_INVALID;
         break;
@@ -722,16 +720,15 @@ static void advertising_init(void) {
     memset(&init, 0, sizeof(init));
 
     init.advdata.name_type               = BLE_ADVDATA_FULL_NAME;
-    init.advdata.include_appearance      = true;
     init.advdata.flags                   = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
     init.advdata.uuids_complete.uuid_cnt = sizeof(m_adv_uuids) / sizeof(m_adv_uuids[0]);
     init.advdata.uuids_complete.p_uuids  = m_adv_uuids;
 
-    init.config.ble_adv_fast_enabled      = true;
-    init.config.ble_adv_fast_interval     = APP_ADV_INTERVAL;
-    init.config.ble_adv_fast_timeout      = APP_ADV_DURATION;
-    init.config.ble_adv_primary_phy       = BLE_GAP_PHY_CODED;
-    init.config.ble_adv_secondary_phy     = BLE_GAP_PHY_CODED;
+    init.config.ble_adv_fast_enabled  = true;
+    init.config.ble_adv_fast_interval = APP_ADV_INTERVAL;
+    init.config.ble_adv_fast_timeout  = APP_ADV_DURATION;
+    init.config.ble_adv_primary_phy   = BLE_GAP_PHY_CODED;
+    init.config.ble_adv_secondary_phy = BLE_GAP_PHY_CODED;
     init.config.ble_adv_extended_enabled  = true;
     init.config.ble_adv_whitelist_enabled = true;
 
