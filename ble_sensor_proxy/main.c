@@ -140,6 +140,8 @@ static ble_uuid_t m_adv_uuids[] = /**< Universally unique service identifiers. *
 
 uint32_t led_state = 0;
 
+#define RSSI_CHANGE_THRESHOLD 1
+#define RSSI_CHANGE_SKIP 1
 int8_t last_rssi = 0;
 
 /**@brief Callback function for asserts in the SoftDevice.
@@ -518,6 +520,9 @@ static void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context) {
         APP_ERROR_CHECK(err_code);
         m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
         err_code      = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
+        APP_ERROR_CHECK(err_code);
+        err_code = sd_ble_gap_rssi_start(p_ble_evt->evt.gap_evt.conn_handle,
+                                         RSSI_CHANGE_THRESHOLD, RSSI_CHANGE_SKIP);
         APP_ERROR_CHECK(err_code);
         break;
 
