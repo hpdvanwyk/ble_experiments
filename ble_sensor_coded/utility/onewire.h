@@ -286,7 +286,8 @@ iBSPACMonewireTemperatureReady(hBSPACMonewireBus bus) {
  * there was an error, the value pointed to by temp_xCel remains
  * unchanged. */
 int iBSPACMonewireReadTemperature(hBSPACMonewireBus bus,
-                                  int16_t*          temp_xCel);
+                                  int16_t*          temp_xCel,
+                                  uint8_t*          count_remain);
 
 /** Convert temperature from 1/16th Cel to tenths Celcius (dCel)
  *

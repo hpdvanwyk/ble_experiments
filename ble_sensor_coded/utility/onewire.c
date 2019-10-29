@@ -242,7 +242,8 @@ int iBSPACMonewireReadPowerSupply(hBSPACMonewireBus bus) {
 }
 
 int iBSPACMonewireReadTemperature(hBSPACMonewireBus bus,
-                                  int16_t*          temp_xCel) {
+                                  int16_t*          temp_xCel,
+                                  uint8_t*          count_remain) {
     int16_t t;
     uint8_t scratchpad[9];
     int     i;
@@ -261,6 +262,7 @@ int iBSPACMonewireReadTemperature(hBSPACMonewireBus bus,
     }
     t = scratchpad[0];
     t |= scratchpad[1] << 8;
-    *temp_xCel = t;
+    *temp_xCel    = t;
+    *count_remain = scratchpad[6];
     return 0;
 }

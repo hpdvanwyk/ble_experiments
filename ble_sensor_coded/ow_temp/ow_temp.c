@@ -77,12 +77,13 @@ static void temp_wait_timeout_handler(void* p_context) {
     oo_temp_reader_t* reader = p_context;
     int               rc;
     int16_t           t_xCel = -999;
+    uint8_t           count_remain;
 
     hiresOn();
 
     vBSPACMonewireParasitePower(reader->bus, false);
 
-    rc = iBSPACMonewireReadTemperature(reader->bus, &t_xCel);
+    rc = iBSPACMonewireReadTemperature(reader->bus, &t_xCel, &count_remain);
     if (rc != 0) {
         NRF_LOG_ERROR("ERROR: read temperature error");
         vBSPACMonewireShutdown(reader->bus);
@@ -96,7 +97,9 @@ static void temp_wait_timeout_handler(void* p_context) {
         if (t_xCel == 0xaa) { // power up state, something went wrong
             return;
         }
-        reader->reading.temperature = (t_xCel * 10) / 2;
+        // See the DS18S20 datasheet for more information on this calculation.
+        int16_t preadj_temp = 10 * (t_xCel >> 1); // truncate last bit and multiply by 10
+        reader->reading.temperature = preadj_temp + ((10 * (16 - count_remain)) / 16);
         break;
     case 0x28: //DS18B20
         if (t_xCel == 0x550) {
