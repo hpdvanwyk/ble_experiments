@@ -136,9 +136,6 @@ static void scan_evt_handler(scan_evt_t const* p_scan_evt) {
         NRF_LOG_INFO("filtermatch %02x:%02x:%02x:%02x:%02x:%02x ",
                      addr[0], addr[1], addr[2],
                      addr[3], addr[4], addr[5]);
-        const ble_gap_evt_adv_report_t* adv = p_scan_evt->params.filter_match.p_adv_report;
-        NRF_LOG_INFO("adv %d", adv->data.len);
-        NRF_LOG_INFO("adv %d", adv->data.len);
     } break;
     case NRF_BLE_SCAN_EVT_CONNECTING_ERROR: {
         err_code = p_scan_evt->params.connecting_err.err_code;

@@ -82,7 +82,7 @@
 
 #define DEVICE_NAME "Can has bluetooth?"        /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME "NordicSemiconductor" /**< Manufacturer. Will be passed to Device Information Service. */
-#define APP_ADV_INTERVAL 798                   /**< The advertising interval (in units of 0.625 ms.). */
+#define APP_ADV_INTERVAL 798                    /**< The advertising interval (in units of 0.625 ms.). */
 
 #define APP_ADV_DURATION 0
 
@@ -96,7 +96,7 @@
 
 #define MIN_CONN_INTERVAL MSEC_TO_UNITS(200, UNIT_1_25_MS) /**< Minimum acceptable connection interval (0.4 seconds). */
 #define MAX_CONN_INTERVAL MSEC_TO_UNITS(200, UNIT_1_25_MS) /**< Maximum acceptable connection interval (0.65 second). */
-#define SLAVE_LATENCY 10                                    /**< Slave latency. */
+#define SLAVE_LATENCY 10                                   /**< Slave latency. */
 #define CONN_SUP_TIMEOUT MSEC_TO_UNITS(14000, UNIT_10_MS)  /**< Connection supervisory timeout (14 seconds). */
 
 #define FIRST_CONN_PARAMS_UPDATE_DELAY APP_TIMER_TICKS(1000) /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
@@ -135,6 +135,11 @@ oo_temp_reader_t ow_temp2;
 APP_TIMER_DEF(m_onewire3_timer_id);
 oo_temp_reader_t ow_temp3;
 
+#define ONEWIRE_DQ_PIN4 24
+#define ONEWIRE_PWR_PIN4 NRF_GPIO_PIN_MAP(0, 22)
+APP_TIMER_DEF(m_onewire4_timer_id);
+oo_temp_reader_t ow_temp4;
+
 #define SENSORS_READ_TIME APP_TIMER_TICKS(1000)
 
 NRF_BLE_GATT_DEF(m_gatt);           /**< GATT module instance. */
@@ -157,10 +162,9 @@ SensorMessage sensor_meas      = SensorMessage_init_zero;
 SensorMessage sensor_meas_zero = SensorMessage_init_zero;
 
 static ble_uuid_t m_adv_uuids[] = /**< Universally unique service identifiers. */
-{
+    {
         {BLE_UUID_BATTERY_SERVICE, BLE_UUID_TYPE_BLE},
-        {BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}
-};
+        {BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}};
 
 uint32_t led_state = 0;
 
@@ -276,7 +280,7 @@ static void temperature_update(ow_temp_reading_t* reading) {
 static void readings_send(void* p_context) {
     ret_code_t err_code;
     sensor_meas.rssi = last_rssi;
-    err_code = ble_sensor_measurement_send(&m_sensor, &sensor_meas);
+    err_code         = ble_sensor_measurement_send(&m_sensor, &sensor_meas);
     if ((err_code != NRF_SUCCESS) &&
         (err_code != NRF_ERROR_INVALID_STATE) &&
         (err_code != NRF_ERROR_RESOURCES) &&
@@ -294,6 +298,7 @@ static void temperature_meas_timeout_handler(void* p_context) {
     read_one_wire_temp(&ow_temp1, temperature_update);
     read_one_wire_temp(&ow_temp2, temperature_update);
     read_one_wire_temp(&ow_temp3, temperature_update);
+    read_one_wire_temp(&ow_temp4, temperature_update);
     err_code = app_timer_start(m_temp_send_timer_id, SENSORS_READ_TIME, NULL);
     APP_ERROR_CHECK(err_code);
 }
@@ -628,7 +633,7 @@ static void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context) {
 
     case BLE_GAP_EVT_RSSI_CHANGED: {
         int8_t rssi = p_ble_evt->evt.gap_evt.params.rssi_changed.rssi;
-        last_rssi = rssi;
+        last_rssi   = rssi;
         NRF_LOG_DEBUG("rssi %d", rssi);
     } break;
 
@@ -739,11 +744,11 @@ static void advertising_init(void) {
     init.advdata.uuids_complete.uuid_cnt = sizeof(m_adv_uuids) / sizeof(m_adv_uuids[0]);
     init.advdata.uuids_complete.p_uuids  = m_adv_uuids;
 
-    init.config.ble_adv_fast_enabled  = true;
-    init.config.ble_adv_fast_interval = APP_ADV_INTERVAL;
-    init.config.ble_adv_fast_timeout  = APP_ADV_DURATION;
-    init.config.ble_adv_primary_phy   = BLE_GAP_PHY_CODED;
-    init.config.ble_adv_secondary_phy = BLE_GAP_PHY_CODED;
+    init.config.ble_adv_fast_enabled      = true;
+    init.config.ble_adv_fast_interval     = APP_ADV_INTERVAL;
+    init.config.ble_adv_fast_timeout      = APP_ADV_DURATION;
+    init.config.ble_adv_primary_phy       = BLE_GAP_PHY_CODED;
+    init.config.ble_adv_secondary_phy     = BLE_GAP_PHY_CODED;
     init.config.ble_adv_extended_enabled  = true;
     init.config.ble_adv_whitelist_enabled = true;
 
@@ -884,6 +889,7 @@ int main(void) {
     one_wire_init(&ow_temp1, m_onewire_timer_id, ONEWIRE_DQ_PIN, ONEWIRE_PWR_PIN);
     one_wire_init(&ow_temp2, m_onewire2_timer_id, ONEWIRE_DQ_PIN2, ONEWIRE_PWR_PIN2);
     one_wire_init(&ow_temp3, m_onewire3_timer_id, ONEWIRE_DQ_PIN3, ONEWIRE_PWR_PIN3);
+    one_wire_init(&ow_temp4, m_onewire4_timer_id, ONEWIRE_DQ_PIN4, ONEWIRE_PWR_PIN4);
 
     // Start execution.
     NRF_LOG_INFO("Sensor thing started.");

@@ -9,7 +9,7 @@ message CentralMessage {
 }
 
 message SensorMessage {
-    repeated TemperatureReading Readings = 1 [(nanopb).max_count = 3];
+    repeated TemperatureReading Readings = 1 [(nanopb).max_count = 4];
     MJReading MJReading = 2;
     CentralMessage ProxyCentral = 3 [(nanopb).proto3 = false];
     sint32 rssi = 4;
