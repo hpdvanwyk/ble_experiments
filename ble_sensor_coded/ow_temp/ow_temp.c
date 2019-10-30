@@ -84,11 +84,11 @@ static void temp_wait_timeout_handler(void* p_context) {
     vBSPACMonewireParasitePower(reader->bus, false);
 
     rc = iBSPACMonewireReadTemperature(reader->bus, &t_xCel, &count_remain);
+    vBSPACMonewireShutdown(reader->bus);
+    hiresOff();
+    nrf_gpio_pin_set(reader->power_pin);
     if (rc != 0) {
         NRF_LOG_ERROR("ERROR: read temperature error");
-        vBSPACMonewireShutdown(reader->bus);
-        hiresOff();
-        nrf_gpio_pin_set(reader->power_pin);
         return;
     }
 
@@ -98,7 +98,7 @@ static void temp_wait_timeout_handler(void* p_context) {
             return;
         }
         // See the DS18S20 datasheet for more information on this calculation.
-        int16_t preadj_temp = 10 * (t_xCel >> 1); // truncate last bit and multiply by 10
+        int16_t preadj_temp         = 10 * (t_xCel >> 1); // truncate last bit and multiply by 10
         reader->reading.temperature = preadj_temp + ((10 * (16 - count_remain)) / 16);
         break;
     case 0x28: //DS18B20
@@ -111,9 +111,10 @@ static void temp_wait_timeout_handler(void* p_context) {
         reader->reading.temperature = t_xCel;
     }
 
-    vBSPACMonewireShutdown(reader->bus);
-    hiresOff();
-    nrf_gpio_pin_set(reader->power_pin);
+    if (reader->reading.temperature == 0) {
+        // If the temperature happens to actually be 0C bump it to 0.1C so that protobuf will send something.
+        reader->reading.temperature = 1;
+    }
 
     reader->callback(&reader->reading);
     return;
