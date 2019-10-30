@@ -31,7 +31,9 @@ package main
 
 import (
 	"ble_experiment_exporter/pb"
+	"io"
 	"log"
+	"syscall"
 
 	gogoio "github.com/gogo/protobuf/io"
 	"go.bug.st/serial.v1"
@@ -50,6 +52,19 @@ func NewSensorReader(tty string, msgChan chan *Messages) *SensorReader {
 	return s
 }
 
+// go serial can return EINTR, just retry whenever that happens.
+type retryReader struct {
+	reader io.Reader
+}
+
+func (r *retryReader) Read(p []byte) (n int, err error) {
+	for {
+		if n, err = r.reader.Read(p); err != syscall.EINTR {
+			return n, err
+		}
+	}
+}
+
 func (s *SensorReader) ReadLoop() {
 	mode := &serial.Mode{
 		BaudRate: 115200,
@@ -59,7 +74,7 @@ func (s *SensorReader) ReadLoop() {
 		log.Print(err)
 		return
 	}
-	delimReader := gogoio.NewDelimitedReader(port, 2048)
+	delimReader := gogoio.NewDelimitedReader(&retryReader{port}, 2048)
 	defer delimReader.Close()
 	for {
 		msg, err := readMessages(delimReader)
