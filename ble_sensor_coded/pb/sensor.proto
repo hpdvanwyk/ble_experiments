@@ -9,19 +9,14 @@ message CentralMessage {
 }
 
 message SensorMessage {
-    repeated TemperatureReading Readings = 1 [(nanopb).max_count = 4];
-    MJReading MJReading = 2;
-    CentralMessage ProxyCentral = 3 [(nanopb).proto3 = false];
-    sint32 rssi = 4;
+    repeated Reading Readings = 1 [(nanopb).max_count = 4];
+    CentralMessage ProxyCentral = 2 [(nanopb).proto3 = false];
+    sint32 rssi = 3;
 }
 
-message TemperatureReading {
-    sint32 Temperature = 1;
-    bytes Id = 2 [(nanopb).max_size = 6, (nanopb).fixed_length = true];
-}
-
-message MJReading {
-    int32 Temperature = 1;
-    int32 Humidity = 2;
-    int32 Battery = 3;
+message Reading {
+    bytes Id = 1 [(nanopb).max_size = 6];
+    sint32 Temperature = 2;
+    int32 Humidity = 3;
+    int32 Battery = 4;
 }

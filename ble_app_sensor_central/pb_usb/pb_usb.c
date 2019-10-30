@@ -60,7 +60,7 @@ void raw_message_to_log(uint8_t* addr, int8_t rssi, uint8_t* data, uint16_t len)
     NRF_LOG_INFO("rssi: %d", rssi);
     int i;
     for (i = 0; i < sensor_meas.Readings_count; i++) {
-        uint8_t* id = sensor_meas.Readings[i].Id;
+        uint8_t* id = sensor_meas.Readings[i].Id.bytes;
         NRF_LOG_INFO("sensor %02X:%02X:%02X:%02X:%02X:%02X",
                      id[0], id[1],
                      id[2], id[3],

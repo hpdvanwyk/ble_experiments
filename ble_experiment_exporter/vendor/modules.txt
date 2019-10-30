@@ -31,3 +31,5 @@ go.bug.st/serial.v1/unixutils
 # golang.org/x/sys v0.0.0-20191018095205-727590c5006e
 golang.org/x/sys/unix
 golang.org/x/sys/windows
+# gopkg.in/yaml.v2 v2.2.4
+gopkg.in/yaml.v2

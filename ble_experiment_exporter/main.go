@@ -31,24 +31,38 @@ package main
 
 import (
 	"flag"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"gopkg.in/yaml.v2"
 )
 
 func main() {
 	ttyDev := flag.String("tty", "/dev/ttyACM0", "the tty device to use")
 	addr := flag.String("addr", ":8080", "TCP address to listen on.")
+	config := flag.String("config", "", "Config file")
 
+	parsedConfig := &SensorConfig{}
 	flag.Parse()
+	if *config != "" {
+		data, err := ioutil.ReadFile(*config)
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+		err = yaml.Unmarshal(data, parsedConfig)
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+	}
 	http.Handle("/metrics", promhttp.Handler())
 	go func() {
 		log.Fatal(http.ListenAndServe(*addr, nil))
 	}()
-	se := NewSensorExporter(30 * time.Second)
+	se := NewSensorExporter(parsedConfig)
 	go se.Run()
 	prometheus.MustRegister(se)
 	sr := NewSensorReader(*ttyDev, se.MsgChan)

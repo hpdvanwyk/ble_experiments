@@ -34,15 +34,26 @@ import (
 	"sync"
 	"time"
 
+	"ble_experiment_exporter/pb"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const DefaultExpiryTime = 30 * time.Second
+
+type SensorConfig struct {
+	Rename  map[string]string
+	Fudge   map[string]float64
+	Timeout map[string]int
+}
+
 func IdString(id []byte) string {
-	if len(id) != 6 {
-		// don't do that
-		return ""
+	idString := ""
+	for i := 0; i < len(id)-1; i++ {
+		idString += fmt.Sprintf("%02x:", id[i])
 	}
-	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", id[0], id[1], id[2], id[3], id[4], id[5])
+	idString += fmt.Sprintf("%02x", id[len(id)-1])
+	return idString
 }
 
 type label struct {
@@ -56,6 +67,33 @@ type metric struct {
 	opts        *prometheus.GaugeOpts
 	lastUpdated time.Time
 	expiryTime  time.Duration
+}
+
+func (s *SensorExporter) IdString(id []byte) string {
+	idString := IdString(id)
+	rename, hasRename := s.config.Rename[idString]
+	if hasRename {
+		return rename
+	}
+	return idString
+}
+
+func (s *SensorExporter) fudgeTemperature(id []byte) float64 {
+	idString := IdString(id)
+	fudge, hasFudge := s.config.Fudge[idString]
+	if hasFudge {
+		return fudge
+	}
+	return 0
+}
+
+func (s *SensorExporter) expiryTime(id []byte) time.Duration {
+	idString := IdString(id)
+	timeout, hasTimeout := s.config.Timeout[idString]
+	if hasTimeout {
+		return time.Duration(timeout) * time.Second
+	}
+	return DefaultExpiryTime
 }
 
 func (se *SensorExporter) updateMetric(value float64,
@@ -93,15 +131,20 @@ func (se *SensorExporter) gc() {
 
 type SensorExporter struct {
 	sync.RWMutex
-	MsgChan    chan *Messages
-	close      chan struct{}
-	metrics    map[string]*metric
-	expiryTime time.Duration
+	MsgChan chan *Messages
+	close   chan struct{}
+	metrics map[string]*metric
+	config  *SensorConfig
 }
 
 var TemperatureOpts = prometheus.GaugeOpts{
 	Name: "ble_sensor_temperature_c",
 	Help: "Temperature reading from a ble sensor.",
+}
+
+var TemperatureFudgeOpts = prometheus.GaugeOpts{
+	Name: "ble_sensor_temperature_fudge_c",
+	Help: "Temperature reading adjustment.",
 }
 
 var RssiOpts = prometheus.GaugeOpts{
@@ -124,12 +167,12 @@ var BatteryOpts = prometheus.GaugeOpts{
 	Help: "Battery charge left.",
 }
 
-func NewSensorExporter(expiryTime time.Duration) *SensorExporter {
+func NewSensorExporter(config *SensorConfig) *SensorExporter {
 	s := &SensorExporter{
-		MsgChan:    make(chan *Messages, 2),
-		close:      make(chan struct{}),
-		metrics:    make(map[string]*metric),
-		expiryTime: expiryTime,
+		MsgChan: make(chan *Messages, 2),
+		close:   make(chan struct{}),
+		metrics: make(map[string]*metric),
+		config:  config,
 	}
 	return s
 }
@@ -153,80 +196,88 @@ func (se *SensorExporter) Collect(metricChan chan<- prometheus.Metric) {
 	}
 }
 
+func (s *SensorExporter) exportCentral(msg *Messages) *pb.CentralMessage {
+	expiryTime := s.expiryTime(msg.Central.RemoteId)
+	central := msg.Central
+	s.updateMetric(
+		float64(msg.Central.Rssi),
+		&RssiOpts,
+		expiryTime,
+		&label{"remoteid", s.IdString(msg.Central.RemoteId)},
+	)
+
+	fmt.Printf("rssi: %v dB\ndevice id: %v\n", msg.Central.Rssi, s.IdString(msg.Central.RemoteId))
+	if msg.Sensor.Rssi != 0 {
+		s.updateMetric(
+			float64(msg.Sensor.Rssi),
+			&RemoteRssiOpts,
+			expiryTime,
+			&label{"remoteid", s.IdString(msg.Central.RemoteId)},
+		)
+	}
+
+	if msg.Sensor.ProxyCentral != nil {
+		central = msg.Sensor.ProxyCentral
+		expiryTime := s.expiryTime(central.RemoteId)
+		s.updateMetric(
+			float64(central.Rssi),
+			&RssiOpts,
+			expiryTime,
+			&label{"remoteid", s.IdString(central.RemoteId)},
+			&label{"proxyid", s.IdString(msg.Central.RemoteId)},
+		)
+	}
+	return central
+}
+
+func (s *SensorExporter) exportReading(c *pb.CentralMessage, r *pb.Reading) {
+	expiryTime := s.expiryTime(c.RemoteId)
+
+	if r.Temperature != 0 {
+		fudge := s.fudgeTemperature(r.Id)
+		s.updateMetric(
+			fudge,
+			&TemperatureFudgeOpts,
+			expiryTime,
+			&label{"remoteid", s.IdString(c.RemoteId)},
+			&label{"sensorid", s.IdString(r.Id)},
+		)
+		s.updateMetric(
+			float64(r.Temperature)/10,
+			&TemperatureOpts,
+			expiryTime,
+			&label{"remoteid", s.IdString(c.RemoteId)},
+			&label{"sensorid", s.IdString(r.Id)},
+		)
+	}
+	if r.Humidity != 0 {
+		s.updateMetric(
+			float64(r.Humidity)/10,
+			&HumidityOpts,
+			expiryTime,
+			&label{"remoteid", s.IdString(c.RemoteId)},
+			&label{"sensorid", s.IdString(r.Id)},
+		)
+	}
+	if r.Battery != 0 {
+		s.updateMetric(
+			float64(r.Battery),
+			&BatteryOpts,
+			expiryTime*4,
+			&label{"remoteid", s.IdString(c.RemoteId)},
+			&label{"sensorid", s.IdString(r.Id)},
+		)
+	}
+}
+
 func (s *SensorExporter) Run() {
 	cleanup := time.NewTicker(1 * time.Second)
 	for {
 		select {
 		case msg := <-s.MsgChan:
-			central := msg.Central
-			s.updateMetric(
-				float64(msg.Central.Rssi),
-				&RssiOpts,
-				s.expiryTime,
-				&label{"remoteid", IdString(msg.Central.RemoteId)},
-			)
-
-			fmt.Printf("rssi: %v dB\ndevice id: %v\n", msg.Central.Rssi, IdString(msg.Central.RemoteId))
-			if msg.Sensor.Rssi != 0 {
-				s.updateMetric(
-					float64(msg.Sensor.Rssi),
-					&RemoteRssiOpts,
-					s.expiryTime,
-					&label{"remoteid", IdString(msg.Central.RemoteId)},
-				)
-			}
-
-			if msg.Sensor.ProxyCentral != nil {
-				central = msg.Sensor.ProxyCentral
-				s.updateMetric(
-					float64(central.Rssi),
-					&RssiOpts,
-					s.expiryTime,
-					&label{"remoteid", IdString(central.RemoteId)},
-					&label{"proxyid", IdString(msg.Central.RemoteId)},
-				)
-			}
-			for i := range msg.Sensor.Readings {
-				fmt.Printf("id: %v\nTemperature: %v C\n",
-					IdString(msg.Sensor.Readings[i].Id),
-					float32(msg.Sensor.Readings[i].Temperature)/10)
-
-				s.updateMetric(
-					float64(msg.Sensor.Readings[i].Temperature)/10,
-					&TemperatureOpts,
-					s.expiryTime,
-					&label{"remoteid", IdString(central.RemoteId)},
-					&label{"sensorid", IdString(msg.Sensor.Readings[i].Id)},
-				)
-			}
-			if msg.Sensor.MJReading != nil {
-				r := msg.Sensor.MJReading
-				if r.Temperature != 0 {
-					s.updateMetric(
-						float64(r.Temperature)/10,
-						&TemperatureOpts,
-						1*time.Minute,
-						&label{"remoteid", IdString(central.RemoteId)},
-						&label{"sensorid", "0"},
-					)
-				}
-				if r.Humidity != 0 {
-					s.updateMetric(
-						float64(r.Humidity)/10,
-						&HumidityOpts,
-						1*time.Minute,
-						&label{"remoteid", IdString(central.RemoteId)},
-						&label{"sensorid", "0"},
-					)
-				}
-				if r.Battery != 0 {
-					s.updateMetric(
-						float64(r.Battery),
-						&BatteryOpts,
-						5*time.Minute,
-						&label{"remoteid", IdString(central.RemoteId)},
-					)
-				}
+			central := s.exportCentral(msg)
+			for _, r := range msg.Sensor.Readings {
+				s.exportReading(central, r)
 			}
 		case <-cleanup.C:
 			s.gc()

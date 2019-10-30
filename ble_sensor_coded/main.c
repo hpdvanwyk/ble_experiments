@@ -266,9 +266,10 @@ static void temperature_update(ow_temp_reading_t* reading) {
 
     int i                               = sensor_meas.Readings_count;
     sensor_meas.Readings[i].Temperature = reading->temperature;
-    memcpy(sensor_meas.Readings[i].Id,
+    memcpy(sensor_meas.Readings[i].Id.bytes,
            reading->serial.id,
            ID_SIZE); // C does not have a sane way of getting a struct members size.
+    sensor_meas.Readings[i].Id.size = ID_SIZE;
     sensor_meas.Readings_count++;
 
     NRF_LOG_INFO("temp1 %d", reading->temperature);

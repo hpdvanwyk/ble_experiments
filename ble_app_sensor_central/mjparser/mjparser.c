@@ -70,6 +70,10 @@ bool mj_parse_to_msg(uint8_t const* p_data,
         return false;
     }
 
+    Reading* reading    = &msg->Readings[0];
+    msg->Readings_count = 1;
+    reading->Id.size    = 1;
+
     switch (p_data[MJ_TYPE_OFFSET]) {
     case MJ_HUMIDITY_TEMPERATURE: {
         if (p_data[MJ_LEN_OFFSET] != MJ_HUMIDITY_TEMPERATURE_LEN) {
@@ -78,22 +82,22 @@ bool mj_parse_to_msg(uint8_t const* p_data,
         NRF_LOG_INFO("temperature %d humidity %d",
                      uint16_decode(&p_data[MJ_DATA_OFFSET]),
                      uint16_decode(&p_data[MJ_DATA2_OFFSET]));
-        msg->MJReading.Temperature = uint16_decode(&p_data[MJ_DATA_OFFSET]);
-        msg->MJReading.Humidity    = uint16_decode(&p_data[MJ_DATA2_OFFSET]);
+        reading->Temperature = uint16_decode(&p_data[MJ_DATA_OFFSET]);
+        reading->Humidity    = uint16_decode(&p_data[MJ_DATA2_OFFSET]);
     } break;
     case MJ_HUMIDITY: {
         if (p_data[MJ_LEN_OFFSET] != MJ_HUMIDITY_LEN) {
             return false;
         }
         NRF_LOG_INFO("humidity %d", uint16_decode(&p_data[MJ_DATA_OFFSET]));
-        msg->MJReading.Humidity = uint16_decode(&p_data[MJ_DATA_OFFSET]);
+        reading->Humidity = uint16_decode(&p_data[MJ_DATA_OFFSET]);
     } break;
     case MJ_TEMPERATURE: {
         if (p_data[MJ_LEN_OFFSET] != MJ_TEMPERATURE_LEN) {
             return false;
         }
         NRF_LOG_INFO("temperature %d", uint16_decode(&p_data[MJ_DATA_OFFSET]));
-        msg->MJReading.Temperature = uint16_decode(&p_data[MJ_DATA_OFFSET]);
+        reading->Temperature = uint16_decode(&p_data[MJ_DATA_OFFSET]);
     } break;
     case MJ_BATTERY: {
         if (p_data[MJ_LEN_OFFSET] != MJ_BATTERY_LEN) {
@@ -101,7 +105,7 @@ bool mj_parse_to_msg(uint8_t const* p_data,
         }
 
         NRF_LOG_INFO("battery %d", p_data[MJ_DATA_OFFSET]);
-        msg->MJReading.Battery = p_data[MJ_DATA_OFFSET];
+        reading->Battery = p_data[MJ_DATA_OFFSET];
     } break;
     default:
         break;
