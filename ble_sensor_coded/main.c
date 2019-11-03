@@ -119,24 +119,25 @@
 #define LED_BLUE LED2_B
 #define LED_RED LED2_R
 
-#define ONEWIRE_DQ_PIN 29
-#define ONEWIRE_PWR_PIN NRF_GPIO_PIN_MAP(0, 2)
+oo_power_t ow_power;
+#define ONEWIRE_PWR_PIN NRF_GPIO_PIN_MAP(0, 22)
 
+#define ONEWIRE_DQ_PIN 13
 APP_TIMER_DEF(m_onewire_timer_id);
 oo_temp_reader_t ow_temp1;
 
 #define ONEWIRE_DQ_PIN2 15
-#define ONEWIRE_PWR_PIN2 NRF_GPIO_PIN_MAP(0, 13)
+//#define ONEWIRE_PWR_PIN2 NRF_GPIO_PIN_MAP(0, 13)
 APP_TIMER_DEF(m_onewire2_timer_id);
 oo_temp_reader_t ow_temp2;
 
-#define ONEWIRE_DQ_PIN3 20
-#define ONEWIRE_PWR_PIN3 NRF_GPIO_PIN_MAP(0, 17)
+#define ONEWIRE_DQ_PIN3 17
+//#define ONEWIRE_PWR_PIN3 NRF_GPIO_PIN_MAP(0, 17)
 APP_TIMER_DEF(m_onewire3_timer_id);
 oo_temp_reader_t ow_temp3;
 
-#define ONEWIRE_DQ_PIN4 24
-#define ONEWIRE_PWR_PIN4 NRF_GPIO_PIN_MAP(0, 22)
+#define ONEWIRE_DQ_PIN4 20
+//#define ONEWIRE_PWR_PIN4 NRF_GPIO_PIN_MAP(0, 22)
 APP_TIMER_DEF(m_onewire4_timer_id);
 oo_temp_reader_t ow_temp4;
 
@@ -887,10 +888,11 @@ int main(void) {
     peer_manager_init();
     tx_power_set();
 
-    one_wire_init(&ow_temp1, m_onewire_timer_id, ONEWIRE_DQ_PIN, ONEWIRE_PWR_PIN);
-    one_wire_init(&ow_temp2, m_onewire2_timer_id, ONEWIRE_DQ_PIN2, ONEWIRE_PWR_PIN2);
-    one_wire_init(&ow_temp3, m_onewire3_timer_id, ONEWIRE_DQ_PIN3, ONEWIRE_PWR_PIN3);
-    one_wire_init(&ow_temp4, m_onewire4_timer_id, ONEWIRE_DQ_PIN4, ONEWIRE_PWR_PIN4);
+    one_wire_power_init(&ow_power, ONEWIRE_PWR_PIN);
+    one_wire_init(&ow_temp1, m_onewire_timer_id, ONEWIRE_DQ_PIN, &ow_power);
+    one_wire_init(&ow_temp2, m_onewire2_timer_id, ONEWIRE_DQ_PIN2, &ow_power);
+    one_wire_init(&ow_temp3, m_onewire3_timer_id, ONEWIRE_DQ_PIN3, &ow_power);
+    one_wire_init(&ow_temp4, m_onewire4_timer_id, ONEWIRE_DQ_PIN4, &ow_power);
 
     // Start execution.
     NRF_LOG_INFO("Sensor thing started.");

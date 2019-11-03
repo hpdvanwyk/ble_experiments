@@ -41,19 +41,25 @@ typedef struct
 } ow_temp_reading_t;
 
 typedef void (*temp_callback)(ow_temp_reading_t* reading);
-typedef struct
-{
+
+typedef struct {
+    uint32_t power_pin;
+    uint32_t count;
+} oo_power_t;
+
+typedef struct {
     sBSPACMonewireBus bus_config;
     hBSPACMonewireBus bus;
     int               external_power;
-    uint32_t          power_pin;
     app_timer_id_t    timer_id;
     ow_temp_reading_t reading;
     temp_callback     callback;
+    oo_power_t*       power;
 } oo_temp_reader_t;
 
 int read_one_wire_temp(oo_temp_reader_t* reader, temp_callback callback);
 
-void one_wire_init(oo_temp_reader_t* reader, app_timer_id_t timer_id, int dq_pin, uint32_t pwr_pin);
+void one_wire_power_init(oo_power_t* reader, uint32_t pwr_pin);
+void one_wire_init(oo_temp_reader_t* reader, app_timer_id_t timer_id, int dq_pin, oo_power_t* power);
 
 #endif //OW_TEMP_H

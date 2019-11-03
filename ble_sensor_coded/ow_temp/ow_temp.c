@@ -34,6 +34,20 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define OO_TEMP_WAIT APP_TIMER_TICKS(750)
 
+void power_on(oo_power_t* power){
+    if (power->count == 0){
+        nrf_gpio_pin_clear(power->power_pin);
+    }
+    power->count++;
+}
+
+void power_off(oo_power_t* power){
+    power->power_pin--;
+    if (power->count==0){
+        nrf_gpio_pin_set(power->power_pin);
+    }
+}
+
 int start_temp_conversion(oo_temp_reader_t* reader) {
     int rc;
     if (!iBSPACMonewireReset(reader->bus)) {
@@ -86,7 +100,7 @@ static void temp_wait_timeout_handler(void* p_context) {
     rc = iBSPACMonewireReadTemperature(reader->bus, &t_xCel, &count_remain);
     vBSPACMonewireShutdown(reader->bus);
     hiresOff();
-    nrf_gpio_pin_set(reader->power_pin);
+    power_off(reader->power);
     if (rc != 0) {
         NRF_LOG_ERROR("ERROR: read temperature error");
         return;
@@ -122,13 +136,13 @@ static void temp_wait_timeout_handler(void* p_context) {
 
 int read_one_wire_temp(oo_temp_reader_t* reader, temp_callback callback) {
     int ret;
-    nrf_gpio_pin_clear(reader->power_pin);
+    power_on(reader->power);
     hiresOn();
     ret = start_temp_conversion(reader);
     if (ret != 0) {
         vBSPACMonewireShutdown(reader->bus);
         hiresOff();
-        nrf_gpio_pin_set(reader->power_pin);
+        power_off(reader->power);
         return ret;
     }
     reader->callback = callback;
@@ -140,7 +154,14 @@ int read_one_wire_temp(oo_temp_reader_t* reader, temp_callback callback) {
     return 0;
 }
 
-void one_wire_init(oo_temp_reader_t* reader, app_timer_id_t timer_id, int dq_pin, uint32_t pwr_pin) {
+void one_wire_power_init(oo_power_t* power, uint32_t pwr_pin) {
+    power->count     = 0;
+    power->power_pin = pwr_pin;
+    nrf_gpio_cfg_output(pwr_pin);
+    nrf_gpio_pin_set(pwr_pin);
+}
+
+void one_wire_init(oo_temp_reader_t* reader, app_timer_id_t timer_id, int dq_pin, oo_power_t* power) {
     // can't get parasitic power to work so I will do my own thing.
     reader->bus = hBSPACMonewireConfigureBus(&reader->bus_config, dq_pin, -1);
 
@@ -150,7 +171,5 @@ void one_wire_init(oo_temp_reader_t* reader, app_timer_id_t timer_id, int dq_pin
                                 temp_wait_timeout_handler);
     APP_ERROR_CHECK(err_code);
     reader->timer_id = timer_id;
-    nrf_gpio_cfg_output(pwr_pin);
-    nrf_gpio_pin_set(pwr_pin);
-    reader->power_pin = pwr_pin;
+    reader->power    = power;
 }
