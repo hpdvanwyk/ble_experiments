@@ -44,6 +44,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define MJ_HUMIDITY_TEMPERATURE 0x0d
 #define MJ_HUMIDITY_TEMPERATURE_LEN 4
+#define MJ_HUMIDITY_TEMPERATURE_SHORT_LEN 3
 
 #define MJ_BATTERY 0x0a
 #define MJ_BATTERY_LEN 1
@@ -76,14 +77,21 @@ bool mj_parse_to_msg(uint8_t const* p_data,
 
     switch (p_data[MJ_TYPE_OFFSET]) {
     case MJ_HUMIDITY_TEMPERATURE: {
-        if (p_data[MJ_LEN_OFFSET] != MJ_HUMIDITY_TEMPERATURE_LEN) {
+        switch (p_data[MJ_LEN_OFFSET]) {
+        case MJ_HUMIDITY_TEMPERATURE_LEN: {
+            reading->Humidity = uint16_decode(&p_data[MJ_DATA2_OFFSET]);
+        } break;
+        case MJ_HUMIDITY_TEMPERATURE_SHORT_LEN: {
+            reading->Humidity = 10 * p_data[MJ_DATA2_OFFSET];
+        } break;
+        default: {
             return false;
         }
-        NRF_LOG_INFO("temperature %d humidity %d",
-                     uint16_decode(&p_data[MJ_DATA_OFFSET]),
-                     uint16_decode(&p_data[MJ_DATA2_OFFSET]));
+        }
         reading->Temperature = uint16_decode(&p_data[MJ_DATA_OFFSET]);
-        reading->Humidity    = uint16_decode(&p_data[MJ_DATA2_OFFSET]);
+        NRF_LOG_INFO("temperature %d humidity %d",
+                     reading->Temperature,
+                     reading->Humidity);
     } break;
     case MJ_HUMIDITY: {
         if (p_data[MJ_LEN_OFFSET] != MJ_HUMIDITY_LEN) {
@@ -108,6 +116,7 @@ bool mj_parse_to_msg(uint8_t const* p_data,
         reading->Battery = p_data[MJ_DATA_OFFSET];
     } break;
     default:
+        NRF_LOG_INFO("unknown type %d", p_data[MJ_TYPE_OFFSET]);
         break;
         return false;
     }
