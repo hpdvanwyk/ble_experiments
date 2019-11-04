@@ -78,7 +78,10 @@ void raw_message_to_log(uint8_t* addr, int8_t rssi, uint8_t* data, uint16_t len)
 bool central_message_to_usb(const uint8_t* addr, int8_t rssi, pb_ostream_t* ostream) {
     CentralMessage msg = CentralMessage_init_zero;
     msg.rssi           = rssi;
-    memcpy(msg.RemoteId, addr, BLE_GAP_ADDR_LEN);
+    // Too many things assume big endian addresses.
+    for (int i = 0; i < BLE_GAP_ADDR_LEN; i++) {
+        msg.RemoteId[i] = addr[BLE_GAP_ADDR_LEN - 1 - i];
+    }
     return pb_encode_delimited(ostream, CentralMessage_fields, &msg);
 }
 

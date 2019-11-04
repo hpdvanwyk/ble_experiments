@@ -599,7 +599,10 @@ static void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context) {
             }
             NRF_LOG_INFO("rssi %d", report->rssi);
             msg.ProxyCentral.rssi = report->rssi;
-            memcpy(msg.ProxyCentral.RemoteId, report->peer_addr.addr, BLE_GAP_ADDR_LEN);
+
+            for (int i = 0; i < BLE_GAP_ADDR_LEN; i++) {
+                msg.ProxyCentral.RemoteId[i] = report->peer_addr.addr[BLE_GAP_ADDR_LEN - 1 - i];
+            }
             msg.has_ProxyCentral = true;
             ret_code_t err_code;
             err_code = ble_sensor_measurement_send(&m_sensor, &msg);

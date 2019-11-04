@@ -31,6 +31,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -48,12 +49,7 @@ type SensorConfig struct {
 }
 
 func IdString(id []byte) string {
-	idString := ""
-	for i := 0; i < len(id)-1; i++ {
-		idString += fmt.Sprintf("%02x:", id[i])
-	}
-	idString += fmt.Sprintf("%02x", id[len(id)-1])
-	return idString
+	return net.HardwareAddr(id).String()
 }
 
 type label struct {
