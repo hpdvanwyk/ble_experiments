@@ -72,6 +72,10 @@
 #include "uuid_util.h"
 #include "pb_usb/pb_usb.h"
 
+#if defined(BOARD_XENON)
+#include "xenon_ant.h"
+#endif
+
 #define APP_BLE_CONN_CFG_TAG 1  /**< Tag that refers to the BLE stack configuration that is set with @ref sd_ble_cfg_set. The default tag is @ref APP_BLE_CONN_CFG_TAG. */
 #define APP_BLE_OBSERVER_PRIO 3 /**< BLE observer priority of the application. There is no need to modify this value. */
 
@@ -356,6 +360,7 @@ static void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context) {
         int8_t rssi = p_ble_evt->evt.gap_evt.params.rssi_changed.rssi;
         err_code    = ble_sensor_c_update_rssi(&m_sensor_c[p_gap_evt->conn_handle], rssi);
         APP_ERROR_CHECK(err_code);
+        NRF_LOG_DEBUG("rssi %d", rssi);
     } break;
 
     case BLE_GAP_EVT_ADV_REPORT: {
@@ -374,6 +379,7 @@ static void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context) {
             if (!ok) {
                 return;
             }
+            NRF_LOG_INFO("rssi %d", report->rssi);
             message_to_usb(report->peer_addr.addr, report->rssi, &msg);
         }
     }
@@ -634,8 +640,10 @@ static void tx_power_set(void) {
 int main(void) {
     bool       erase_bonds;
     ret_code_t err;
-
     // Initialize.
+#if defined(BOARD_XENON)
+    xenon_use_external_antenna();
+#endif
     log_init();
     timer_init();
     gpio3v3_init();

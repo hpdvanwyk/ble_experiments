@@ -1,4 +1,4 @@
-PROJECT_NAME     := ble_sensor_central_pca10059_s140
+PROJECT_NAME     := ble_sensor_central_xenon_s140
 TARGETS          := nrf52840_xxaa
 OUTPUT_DIRECTORY := _build
 
@@ -145,6 +145,7 @@ SRC_FILES += \
   $(PROJ_DIR)/usb.c \
   $(PROJ_DIR)/uuid_util.c \
   $(PROJ_DIR)/pb_usb/pb_usb.c \
+  $(PROJ_DIR)/xenon/xenon_ant.c \
 
 # Include folders common to all targets
 INC_FOLDERS += \
@@ -297,6 +298,7 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/usbd \
   $(SDK_ROOT)/components/libraries/usbd/class/cdc/acm \
   $(PROJ_DIR) \
+  $(PROJ_DIR)/xenon \
   $(PROJ_DIR)/../ble_sensor_coded \
   $(PROJ_DIR)/../ble_sensor_coded/utility/ \
   $(PROJ_DIR)/../ble_sensor_coded/pb/ \
@@ -315,8 +317,8 @@ OPT = -O3 -g3
 # C flags common to all targets
 CFLAGS += $(OPT)
 CFLAGS += -DBLE_STACK_SUPPORT_REQD
-CFLAGS += -DCUSTOM_BOARD_INC=pca100593v3
-CFLAGS += -DBOARD_PCA100593v3
+CFLAGS += -DCUSTOM_BOARD_INC=xenon
+CFLAGS += -DBOARD_XENON
 CFLAGS += -DCONFIG_GPIO_AS_PINRESET
 CFLAGS += -DFLOAT_ABI_HARD
 CFLAGS += -DMBEDTLS_CONFIG_FILE=\"nrf_crypto_mbedtls_config.h\"
