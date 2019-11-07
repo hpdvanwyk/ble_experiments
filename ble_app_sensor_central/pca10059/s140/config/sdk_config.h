@@ -6320,7 +6320,7 @@
 // <i> Vendor ID ordered from USB IF: http://www.usb.org/developers/vendor/
 
 #ifndef APP_USBD_VID
-#define APP_USBD_VID 0
+#define APP_USBD_VID 0x6666
 #endif
 
 // <o> APP_USBD_PID - Product ID.  <0x0000-0xFFFF>
@@ -6330,7 +6330,7 @@
 // <i> Selected Product ID
 
 #ifndef APP_USBD_PID
-#define APP_USBD_PID 0
+#define APP_USBD_PID 1
 #endif
 
 // <o> APP_USBD_DEVICE_VER_MAJOR - Device version, major part.  <0-99>
@@ -6547,7 +6547,7 @@
 // <i> Note: This value is not editable in Configuration Wizard.
 // <i> Configuration string that is defined the same way like in @ref APP_USBD_STRINGS_MANUFACTURER.
 #ifndef APP_USBD_STRINGS_CONFIGURATION
-#define APP_USBD_STRINGS_CONFIGURATION APP_USBD_STRING_DESC("Default configuration")
+#define APP_USBD_STRINGS_CONFIGURATION APP_USBD_STRING_DESC("BLE experiment")
 #endif
 
 // </e>
