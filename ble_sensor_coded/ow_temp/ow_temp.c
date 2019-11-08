@@ -34,16 +34,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define OO_TEMP_WAIT APP_TIMER_TICKS(750)
 
-void power_on(oo_power_t* power){
-    if (power->count == 0){
+void power_on(oo_power_t* power) {
+    if (power->count == 0) {
         nrf_gpio_pin_clear(power->power_pin);
     }
     power->count++;
 }
 
-void power_off(oo_power_t* power){
-    power->power_pin--;
-    if (power->count==0){
+void power_off(oo_power_t* power) {
+    power->count--;
+    if (power->count == 0) {
         nrf_gpio_pin_set(power->power_pin);
     }
 }
