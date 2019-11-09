@@ -163,6 +163,11 @@ var BatteryOpts = prometheus.GaugeOpts{
 	Help: "Battery charge left.",
 }
 
+var BatteryVoltageOpts = prometheus.GaugeOpts{
+	Name: "ble_battery_voltage_v",
+	Help: "Battery voltage.",
+}
+
 func NewSensorExporter(config *SensorConfig) *SensorExporter {
 	s := &SensorExporter{
 		MsgChan: make(chan *Messages, 2),
@@ -207,6 +212,15 @@ func (s *SensorExporter) exportCentral(msg *Messages) *pb.CentralMessage {
 		s.updateMetric(
 			float64(msg.Sensor.Rssi),
 			&RemoteRssiOpts,
+			expiryTime,
+			&label{"remoteid", s.IdString(msg.Central.RemoteId)},
+		)
+	}
+
+	if msg.Sensor.BatteryVoltage != 0 {
+		s.updateMetric(
+			float64(msg.Sensor.BatteryVoltage)/100,
+			&BatteryVoltageOpts,
 			expiryTime,
 			&label{"remoteid", s.IdString(msg.Central.RemoteId)},
 		)

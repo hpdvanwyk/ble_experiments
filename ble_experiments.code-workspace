@@ -36,7 +36,12 @@
 			"app_timer.h": "c",
 			"app_button.h": "c",
 			"mjparser.h": "c",
-			"nrf_ble_scan.h": "c"
+			"nrf_ble_scan.h": "c",
+			"nrf_drv_saadc.h": "c",
+			"nrfx_saadc.h": "c",
+			"nrfx.h": "c",
+			"nrfx_config.h": "c",
+			"sdk_config.h": "c"
 		}
 	}
 }

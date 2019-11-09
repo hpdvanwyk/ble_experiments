@@ -131,6 +131,7 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_eddsa.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_hash.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_hmac.c \
+  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_saadc.c \
   $(PROJ_DIR)/utility/hires.c \
   $(PROJ_DIR)/utility/onewire.c \
   $(PROJ_DIR)/ow_temp/ow_temp.c \
@@ -138,6 +139,7 @@ SRC_FILES += \
   $(NANOPB_DIR)/pb_decode.c \
   $(NANOPB_DIR)/pb_common.c \
   $(PROJ_DIR)/pb/sensor.pb.c \
+  $(PROJ_DIR)/bat_adc.c \
 
 # Include folders common to all targets
 INC_FOLDERS += \
@@ -408,6 +410,16 @@ sdk_config:
 
 hex: default
 	mergehex -m $(OUTPUT_DIRECTORY)/nrf52840_xxaa.hex $(SDK_ROOT)/components/softdevice/s140/hex/s140_nrf52_6.1.1_softdevice.hex -o $(OUTPUT_DIRECTORY)/nrf52840_xxaa_s140.hex
+
+blackmagicflashnosoft: default
+	arm-none-eabi-gdb -nx --batch \
+	-ex 'target extended-remote $(BLACKMAGIC_TARGET)' \
+	-ex 'monitor swdp_scan' \
+	-ex 'attach 1' \
+	-ex 'load' \
+	-ex 'compare-sections' \
+	-ex 'kill' \
+	$(OUTPUT_DIRECTORY)/nrf52840_xxaa.hex
 
 blackmagicflash: hex
 	arm-none-eabi-gdb -nx --batch \

@@ -79,6 +79,7 @@
 #include "utility/onewire.h"
 #include "utility/hires.h"
 #include "ow_temp/ow_temp.h"
+#include "bat_adc.h"
 
 #define DEVICE_NAME "Can has bluetooth?"        /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME "NordicSemiconductor" /**< Manufacturer. Will be passed to Device Information Service. */
@@ -90,9 +91,10 @@
 #define APP_BLE_OBSERVER_PRIO 3 /**< Application's BLE observer priority. You shouldn't need to modify this value. */
 
 #define TEMPERATURE_MEAS_INTERVAL APP_TIMER_TICKS(5953)
+#define ADC_INTERVAL APP_TIMER_TICKS(10000)
 
-#define LED_OFF_INTERVAL APP_TIMER_TICKS(9900)
-#define LED_ON_INTERVAL APP_TIMER_TICKS(100)
+#define LED_OFF_INTERVAL APP_TIMER_TICKS(9950)
+#define LED_ON_INTERVAL APP_TIMER_TICKS(50)
 
 #define MIN_CONN_INTERVAL MSEC_TO_UNITS(200, UNIT_1_25_MS) /**< Minimum acceptable connection interval (0.4 seconds). */
 #define MAX_CONN_INTERVAL MSEC_TO_UNITS(200, UNIT_1_25_MS) /**< Maximum acceptable connection interval (0.65 second). */
@@ -149,6 +151,8 @@ BLE_ADVERTISING_DEF(m_advertising); /**< Advertising module instance. */
 APP_TIMER_DEF(m_temp_timer_id);
 APP_TIMER_DEF(m_temp_send_timer_id);
 APP_TIMER_DEF(m_led_timer_id);
+
+APP_TIMER_DEF(m_adc_timer_id);
 
 BLE_SENSOR_DEF(m_sensor);
 
@@ -305,6 +309,16 @@ static void temperature_meas_timeout_handler(void* p_context) {
     APP_ERROR_CHECK(err_code);
 }
 
+static void adc_callback_handler(const nrfx_saadc_done_evt_t* data) {
+    if (data->size >= 1) {
+        sensor_meas.BatteryVoltage = saadc_convert_to_volts(data->p_buffer[0]);
+    }
+}
+
+static void adc_timer_handler(void* p_context) {
+    saadc_sample(adc_callback_handler);
+}
+
 static void led_timeout_handler(void* p_context) {
     ret_code_t err_code;
     UNUSED_PARAMETER(p_context);
@@ -349,6 +363,10 @@ static void timers_init(void) {
     err_code = app_timer_create(&m_temp_send_timer_id,
                                 APP_TIMER_MODE_SINGLE_SHOT,
                                 readings_send);
+
+    err_code = app_timer_create(&m_adc_timer_id,
+                                APP_TIMER_MODE_REPEATED,
+                                adc_timer_handler);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -458,6 +476,9 @@ static void application_timers_start(void) {
     APP_ERROR_CHECK(err_code);
 
     err_code = app_timer_start(m_led_timer_id, LED_OFF_INTERVAL, NULL);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = app_timer_start(m_adc_timer_id, ADC_INTERVAL, NULL);
     APP_ERROR_CHECK(err_code);
 }
 
