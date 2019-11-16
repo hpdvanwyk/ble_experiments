@@ -301,10 +301,10 @@ static void readings_send(void* p_context) {
 static void temperature_meas_timeout_handler(void* p_context) {
     ret_code_t err_code;
     UNUSED_PARAMETER(p_context);
-    read_one_wire_temp(&ow_temp1, temperature_update);
-    read_one_wire_temp(&ow_temp2, temperature_update);
-    read_one_wire_temp(&ow_temp3, temperature_update);
-    read_one_wire_temp(&ow_temp4, temperature_update);
+    read_one_wire_temp(&ow_temp1, temperature_update, 11);
+    read_one_wire_temp(&ow_temp2, temperature_update, 11);
+    read_one_wire_temp(&ow_temp3, temperature_update, 11);
+    read_one_wire_temp(&ow_temp4, temperature_update, 11);
     err_code = app_timer_start(m_temp_send_timer_id, SENSORS_READ_TIME, NULL);
     APP_ERROR_CHECK(err_code);
 }

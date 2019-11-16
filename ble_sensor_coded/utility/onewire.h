@@ -133,7 +133,8 @@ enum {
    * use #iBSPACMonewireReadBit_ni to determine whether the conversion
    * has completed.  Completion is indicated when the device responds
    * with a 1. */
-    BSPACM_ONEWIRE_CMD_CONVERT_T = 0x44,
+    BSPACM_ONEWIRE_CMD_CONVERT_T        = 0x44,
+    BSPACM_ONEWIRE_CMD_WRITE_SCRATCHPAD = 0x4e,
 };
 
 /** Reset the bus and check for device presence.
@@ -288,6 +289,8 @@ iBSPACMonewireTemperatureReady(hBSPACMonewireBus bus) {
 int iBSPACMonewireReadTemperature(hBSPACMonewireBus bus,
                                   int16_t*          temp_xCel,
                                   uint8_t*          count_remain);
+
+int iBSPACMonewireSetResolution(hBSPACMonewireBus bus, int resolution);
 
 /** Convert temperature from 1/16th Cel to tenths Celcius (dCel)
  *

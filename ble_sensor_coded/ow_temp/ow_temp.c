@@ -32,7 +32,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "app_error.h"
 #include "nrf_gpio.h"
 
-#define OO_TEMP_WAIT APP_TIMER_TICKS(750)
+// Form the DS12B20 datasheet
+#define OO_TEMP_WAIT_9_BIT APP_TIMER_TICKS(94)
+#define OO_TEMP_WAIT_10_BIT APP_TIMER_TICKS(188)
+#define OO_TEMP_WAIT_11_BIT APP_TIMER_TICKS(375)
+#define OO_TEMP_WAIT_12_BIT APP_TIMER_TICKS(750)
+
+#define DS18B20 0x28
+#define DS18S20 0x10
 
 void power_on(oo_power_t* power) {
     if (power->count == 0) {
@@ -48,7 +55,35 @@ void power_off(oo_power_t* power) {
     }
 }
 
-int start_temp_conversion(oo_temp_reader_t* reader) {
+int set_resolution(oo_temp_reader_t* reader, int resolution) {
+    int rc;
+    rc = iBSPACMonewireSetResolution(reader->bus, resolution);
+    if (rc != 0) {
+        NRF_LOG_INFO("ERR setting resolution P0.%u", reader->bus->dq_pin);
+        return -1;
+    }
+    switch (resolution) {
+    case 9:
+        reader->convert_wait = OO_TEMP_WAIT_9_BIT;
+        break;
+    case 10:
+        reader->convert_wait = OO_TEMP_WAIT_10_BIT;
+        break;
+    case 11:
+        reader->convert_wait = OO_TEMP_WAIT_11_BIT;
+        break;
+    case 12:
+        reader->convert_wait = OO_TEMP_WAIT_12_BIT;
+        break;
+    default:
+        NRF_LOG_INFO("ERR invalid resolution P0.%u", resolution);
+        return -1;
+        break;
+    }
+    return 0;
+}
+
+int start_temp_conversion(oo_temp_reader_t* reader, int resolution) {
     int rc;
     if (!iBSPACMonewireReset(reader->bus)) {
         NRF_LOG_INFO("ERR conversion: No DS18B20 present on P0.%u", reader->bus->dq_pin);
@@ -59,6 +94,15 @@ int start_temp_conversion(oo_temp_reader_t* reader) {
     if (rc != 0) {
         NRF_LOG_INFO("ERR serial failure on P0.%u", reader->bus->dq_pin);
         return -1;
+    }
+
+    if (reader->reading.serial.family == DS18B20) {
+        rc = set_resolution(reader, resolution);
+        if (rc != 0) {
+            return -1;
+        }
+    } else {
+        reader->convert_wait = OO_TEMP_WAIT_12_BIT;
     }
 
     rc = iBSPACMonewireRequestTemperature(reader->bus);
@@ -107,7 +151,7 @@ static void temp_wait_timeout_handler(void* p_context) {
     }
 
     switch (reader->reading.serial.family) {
-    case 0x10:                //DS18S20
+    case DS18S20:
         if (t_xCel == 0xaa) { // power up state, something went wrong
             return;
         }
@@ -115,7 +159,7 @@ static void temp_wait_timeout_handler(void* p_context) {
         int16_t preadj_temp         = 10 * (t_xCel >> 1); // truncate last bit and multiply by 10
         reader->reading.temperature = preadj_temp + ((10 * (16 - count_remain)) / 16);
         break;
-    case 0x28: //DS18B20
+    case DS18B20:
         if (t_xCel == 0x550) {
             return;
         }
@@ -134,11 +178,11 @@ static void temp_wait_timeout_handler(void* p_context) {
     return;
 }
 
-int read_one_wire_temp(oo_temp_reader_t* reader, temp_callback callback) {
+int read_one_wire_temp(oo_temp_reader_t* reader, temp_callback callback, int resolution) {
     int ret;
     power_on(reader->power);
     hiresOn();
-    ret = start_temp_conversion(reader);
+    ret = start_temp_conversion(reader, resolution);
     if (ret != 0) {
         vBSPACMonewireShutdown(reader->bus);
         hiresOff();
@@ -147,7 +191,7 @@ int read_one_wire_temp(oo_temp_reader_t* reader, temp_callback callback) {
     }
     reader->callback = callback;
 
-    ret_code_t err_code = app_timer_start(reader->timer_id, OO_TEMP_WAIT, reader);
+    ret_code_t err_code = app_timer_start(reader->timer_id, reader->convert_wait, reader);
     APP_ERROR_CHECK(err_code);
     hiresOff();
 

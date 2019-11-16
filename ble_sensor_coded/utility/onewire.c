@@ -221,6 +221,66 @@ int iBSPACMonewireReadSerialNumber(hBSPACMonewireBus           bus,
     return 0;
 }
 
+int iBSPACMonewireReadScratchpad(hBSPACMonewireBus bus,
+                                 uint8_t*          scratchpad,
+                                 int               scratchpad_len) {
+    int i;
+    if (!iBSPACMonewireReset(bus)) {
+        return -1;
+    }
+    vBSPACMonewireWriteByte(bus, BSPACM_ONEWIRE_CMD_SKIP_ROM);
+    vBSPACMonewireWriteByte(bus, BSPACM_ONEWIRE_CMD_READ_SCRATCHPAD);
+    for (i = 0; i < scratchpad_len; ++i) {
+        scratchpad[i] = iBSPACMonewireReadByte(bus);
+    }
+    if (0 != iBSPACMonewireComputeCRC(scratchpad, scratchpad_len)) {
+        NRF_LOG_ERROR("TEMP CRC FAILURE");
+        return -1;
+    }
+    return 0;
+}
+
+// Set the resolution of the DS18B20
+int iBSPACMonewireSetResolution(hBSPACMonewireBus bus, int resolution) {
+    if (!iBSPACMonewireReset(bus)) {
+        return -1;
+    }
+    uint8_t config = 0;
+    switch (resolution) {
+    case 9: {
+        config = 0x1f;
+    } break;
+    case 10: {
+        config = 0x3f;
+    } break;
+    case 11: {
+        config = 0x5f;
+    } break;
+    case 12: {
+        config = 0x7f;
+    } break;
+    default: {
+        return -1;
+    } break;
+    }
+    vBSPACMonewireWriteByte(bus, BSPACM_ONEWIRE_CMD_SKIP_ROM);
+    vBSPACMonewireWriteByte(bus, BSPACM_ONEWIRE_CMD_WRITE_SCRATCHPAD);
+    vBSPACMonewireWriteByte(bus, -128);
+    vBSPACMonewireWriteByte(bus, 127);
+    vBSPACMonewireWriteByte(bus, config);
+
+    uint8_t scratchpad[9];
+
+    if (0 != iBSPACMonewireReadScratchpad(bus, scratchpad, sizeof(scratchpad))) {
+        return -1;
+    }
+    if (scratchpad[4] != config) {
+        NRF_LOG_ERROR("scratchpad config mismatch");
+        return -1;
+    }
+    return 0;
+}
+
 int iBSPACMonewireRequestTemperature(hBSPACMonewireBus bus) {
     if (!iBSPACMonewireReset(bus)) {
         return -1;
@@ -246,18 +306,8 @@ int iBSPACMonewireReadTemperature(hBSPACMonewireBus bus,
                                   uint8_t*          count_remain) {
     int16_t t;
     uint8_t scratchpad[9];
-    int     i;
 
-    if (!iBSPACMonewireReset(bus)) {
-        return -1;
-    }
-    vBSPACMonewireWriteByte(bus, BSPACM_ONEWIRE_CMD_SKIP_ROM);
-    vBSPACMonewireWriteByte(bus, BSPACM_ONEWIRE_CMD_READ_SCRATCHPAD);
-    for (i = 0; i < sizeof(scratchpad); ++i) {
-        scratchpad[i] = iBSPACMonewireReadByte(bus);
-    }
-    if (0 != iBSPACMonewireComputeCRC(scratchpad, sizeof(scratchpad))) {
-        NRF_LOG_ERROR("TEMP CRC FAILURE");
+    if (0 != iBSPACMonewireReadScratchpad(bus, scratchpad, sizeof(scratchpad))) {
         return -1;
     }
     t = scratchpad[0];
