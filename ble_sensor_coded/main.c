@@ -90,8 +90,8 @@
 #define APP_BLE_CONN_CFG_TAG 1  /**< A tag identifying the SoftDevice BLE configuration. */
 #define APP_BLE_OBSERVER_PRIO 3 /**< Application's BLE observer priority. You shouldn't need to modify this value. */
 
-#define TEMPERATURE_MEAS_INTERVAL APP_TIMER_TICKS(5953)
-#define ADC_INTERVAL APP_TIMER_TICKS(10000)
+#define TEMPERATURE_MEAS_INTERVAL APP_TIMER_TICKS(31013)
+#define ADC_INTERVAL APP_TIMER_TICKS(120011)
 
 #define LED_OFF_INTERVAL APP_TIMER_TICKS(9950)
 #define LED_ON_INTERVAL APP_TIMER_TICKS(50)
