@@ -40,7 +40,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const DefaultExpiryTime = 30 * time.Second
+const DefaultExpiryTime = 100 * time.Second
 
 type SensorConfig struct {
 	Rename  map[string]string
@@ -221,7 +221,7 @@ func (s *SensorExporter) exportCentral(msg *Messages) *pb.CentralMessage {
 		s.updateMetric(
 			float64(msg.Sensor.BatteryVoltage)/100,
 			&BatteryVoltageOpts,
-			expiryTime,
+			expiryTime*4,
 			&label{"remoteid", s.IdString(msg.Central.RemoteId)},
 		)
 	}
