@@ -46,11 +46,9 @@
 #include "nrf.h"
 #include "nrfx_saadc.h"
 #include "nrf_log.h"
-#include "bat_adc.h"
+#include "adc.h"
 
-#define SAMPLES_IN_BUFFER 1
-
-static nrf_saadc_value_t m_buffer_pool[2][SAMPLES_IN_BUFFER];
+static nrf_saadc_value_t m_buffer_pool[SAMPLES_IN_BUFFER];
 
 adc_callback callback;
 
@@ -60,45 +58,90 @@ int16_t saadc_convert_to_volts(int16_t input) {
 
 void saadc_callback(nrfx_saadc_evt_t const* p_event) {
     if (p_event->type == NRFX_SAADC_EVT_DONE) {
-        nrfx_err_t err_code;
-
-        err_code = nrfx_saadc_buffer_convert(p_event->data.done.p_buffer, SAMPLES_IN_BUFFER);
-        APP_ERROR_CHECK(err_code);
-
         nrfx_saadc_uninit();
         callback(&p_event->data.done);
     }
+    if (p_event->type == NRFX_SAADC_EVT_CALIBRATEDONE) {
+        nrfx_saadc_uninit();
+    }
 }
 
-void saadc_init(void) {
-    nrfx_err_t                 err_code;
-    nrf_saadc_channel_config_t channel_config =
-        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(SAADC_CH_PSELP_PSELP_VDDHDIV5);
-    channel_config.burst = SAADC_CH_CONFIG_BURST_Enabled;
+bool saadc_init(
+    nrfx_saadc_config_t*        saadc_config,
+    nrf_saadc_channel_config_t* channel_config,
+    uint32_t                    len,
+    adc_callback                c) {
 
+    nrfx_err_t err_code;
+    bool       busy = nrf_saadc_busy_check();
+    if (busy) {
+        return true;
+    }
+
+    err_code = nrfx_saadc_init(saadc_config, saadc_callback);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = nrfx_saadc_channel_init(0, channel_config);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = nrfx_saadc_buffer_convert(m_buffer_pool, len);
+    APP_ERROR_CHECK(err_code);
+
+    nrf_saadc_continuous_mode_enable(80);
+
+    callback = c;
+    err_code = nrfx_saadc_sample();
+    APP_ERROR_CHECK(err_code);
+    return false;
+}
+
+bool saadc_sample_bat(adc_callback c) {
     nrfx_saadc_config_t saadc_config =
         NRFX_SAADC_DEFAULT_CONFIG;
     saadc_config.low_power_mode = true;
     saadc_config.resolution     = SAADC_RESOLUTION_VAL_12bit;
-    saadc_config.oversample     = SAADC_OVERSAMPLE_OVERSAMPLE_Over4x;
+    saadc_config.oversample     = SAADC_OVERSAMPLE_OVERSAMPLE_Over8x;
+
+    nrf_saadc_channel_config_t channel_config =
+        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(SAADC_CH_PSELP_PSELP_VDDHDIV5);
+    channel_config.burst = SAADC_CH_CONFIG_BURST_Enabled;
+
+    return saadc_init(&saadc_config, &channel_config, BAT_SAMPLES, c);
+}
+
+bool saadc_sample_ct(adc_callback c) {
+    NRF_LOG_INFO("CT start");
+    nrfx_saadc_config_t saadc_config =
+        NRFX_SAADC_DEFAULT_CONFIG;
+    saadc_config.low_power_mode = false;
+    saadc_config.resolution     = SAADC_RESOLUTION_VAL_14bit;
+    saadc_config.oversample     = SAADC_OVERSAMPLE_OVERSAMPLE_Over64x;
+
+    nrf_saadc_channel_config_t channel_config =
+        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN5);
+    channel_config.burst = SAADC_CH_CONFIG_BURST_Enabled;
+    channel_config.gain  = NRF_SAADC_GAIN1;
+
+    return saadc_init(&saadc_config, &channel_config, CT_SAMPLES, c);
+}
+
+bool saadc_calibrate() {
+    nrfx_err_t          err_code;
+    nrfx_saadc_config_t saadc_config =
+        NRFX_SAADC_DEFAULT_CONFIG;
+    saadc_config.low_power_mode = false;
+    saadc_config.resolution     = SAADC_RESOLUTION_VAL_14bit;
+    saadc_config.oversample     = SAADC_OVERSAMPLE_OVERSAMPLE_Over32x;
+
+    bool busy = nrf_saadc_busy_check();
+    if (busy) {
+        return true;
+    }
 
     err_code = nrfx_saadc_init(&saadc_config, saadc_callback);
     APP_ERROR_CHECK(err_code);
 
-    err_code = nrfx_saadc_channel_init(0, &channel_config);
+    err_code = nrfx_saadc_calibrate_offset();
     APP_ERROR_CHECK(err_code);
-
-    err_code = nrfx_saadc_buffer_convert(m_buffer_pool[0], SAMPLES_IN_BUFFER);
-    APP_ERROR_CHECK(err_code);
-
-    err_code = nrfx_saadc_buffer_convert(m_buffer_pool[1], SAMPLES_IN_BUFFER);
-    APP_ERROR_CHECK(err_code);
-}
-
-void saadc_sample(adc_callback c) {
-    callback = c;
-    saadc_init();
-    nrfx_err_t err_code;
-    err_code = nrfx_saadc_sample();
-    APP_ERROR_CHECK(err_code);
+    return false;
 }

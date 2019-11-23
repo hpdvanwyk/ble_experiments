@@ -139,7 +139,7 @@ SRC_FILES += \
   $(NANOPB_DIR)/pb_decode.c \
   $(NANOPB_DIR)/pb_common.c \
   $(PROJ_DIR)/pb/sensor.pb.c \
-  $(PROJ_DIR)/bat_adc.c \
+  $(PROJ_DIR)/adc.c \
 
 # Include folders common to all targets
 INC_FOLDERS += \
@@ -420,6 +420,17 @@ blackmagicflashnosoft: default
 	-ex 'compare-sections' \
 	-ex 'kill' \
 	$(OUTPUT_DIRECTORY)/nrf52840_xxaa.hex
+
+blackmagicscan:
+	arm-none-eabi-gdb -nx --batch \
+	-ex 'target extended-remote $(BLACKMAGIC_TARGET)' \
+	-ex 'monitor swdp_scan' \
+	-ex 'monitor swdp_scan' \
+	-ex 'monitor swdp_scan' \
+	-ex 'monitor swdp_scan' \
+	-ex 'monitor swdp_scan' \
+	-ex 'monitor swdp_scan' \
+	-ex 'monitor swdp_scan' \
 
 blackmagicflash: hex
 	arm-none-eabi-gdb -nx --batch \

@@ -143,6 +143,16 @@ var TemperatureFudgeOpts = prometheus.GaugeOpts{
 	Help: "Temperature reading adjustment.",
 }
 
+var HumidityOpts = prometheus.GaugeOpts{
+	Name: "ble_sensor_humidity_p",
+	Help: "Humidity.",
+}
+
+var CurrentOpts = prometheus.GaugeOpts{
+	Name: "ble_current_transformer_a",
+	Help: "Current sensed by current transformer.",
+}
+
 var RssiOpts = prometheus.GaugeOpts{
 	Name: "ble_rssi_db",
 	Help: "Rssi of ble device.",
@@ -151,11 +161,6 @@ var RssiOpts = prometheus.GaugeOpts{
 var RemoteRssiOpts = prometheus.GaugeOpts{
 	Name: "ble_remote_rssi_db",
 	Help: "Rssi seen on remote ble device.",
-}
-
-var HumidityOpts = prometheus.GaugeOpts{
-	Name: "ble_sensor_humidity_p",
-	Help: "Humidity.",
 }
 
 var BatteryOpts = prometheus.GaugeOpts{
@@ -274,6 +279,15 @@ func (s *SensorExporter) exportReading(c *pb.CentralMessage, r *pb.Reading) {
 			float64(r.Battery),
 			&BatteryOpts,
 			expiryTime*4,
+			&label{"remoteid", s.IdString(c.RemoteId)},
+			&label{"sensorid", s.IdString(r.Id)},
+		)
+	}
+	if r.Current != 0 {
+		s.updateMetric(
+			float64(r.Current),
+			&CurrentOpts,
+			expiryTime,
 			&label{"remoteid", s.IdString(c.RemoteId)},
 			&label{"sensorid", s.IdString(r.Id)},
 		)

@@ -9,7 +9,7 @@ message CentralMessage {
 }
 
 message SensorMessage {
-    repeated Reading Readings = 1 [(nanopb).max_count = 4];
+    repeated Reading Readings = 1 [(nanopb).max_count = 5];
     CentralMessage ProxyCentral = 2 [(nanopb).proto3 = false];
     sint32 rssi = 3;
     int32 BatteryVoltage = 4;
@@ -20,4 +20,5 @@ message Reading {
     sint32 Temperature = 2;
     int32 Humidity = 3;
     int32 Battery = 4;
+    float Current = 5;
 }

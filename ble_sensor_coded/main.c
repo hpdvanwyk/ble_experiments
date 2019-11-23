@@ -41,6 +41,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <math.h>
 #include "nrf_error.h"
 #include "nordic_common.h"
 #include "nrf.h"
@@ -79,7 +80,7 @@
 #include "utility/onewire.h"
 #include "utility/hires.h"
 #include "ow_temp/ow_temp.h"
-#include "bat_adc.h"
+#include "adc.h"
 
 #define DEVICE_NAME "Can has bluetooth?"        /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME "NordicSemiconductor" /**< Manufacturer. Will be passed to Device Information Service. */
@@ -91,7 +92,12 @@
 #define APP_BLE_OBSERVER_PRIO 3 /**< Application's BLE observer priority. You shouldn't need to modify this value. */
 
 #define TEMPERATURE_MEAS_INTERVAL APP_TIMER_TICKS(31013)
-#define ADC_INTERVAL APP_TIMER_TICKS(120011)
+#define ADC_BAT_INTERVAL APP_TIMER_TICKS(120011)
+#define ADC_CT_INTERVAL APP_TIMER_TICKS(31013)
+
+#define ADC_CALIBRATE_INTERVAL APP_TIMER_TICKS(600000)
+
+#define ADC_WAIT_INTERVAL APP_TIMER_TICKS(1000)
 
 #define LED_OFF_INTERVAL APP_TIMER_TICKS(9950)
 #define LED_ON_INTERVAL APP_TIMER_TICKS(50)
@@ -152,12 +158,16 @@ APP_TIMER_DEF(m_temp_timer_id);
 APP_TIMER_DEF(m_temp_send_timer_id);
 APP_TIMER_DEF(m_led_timer_id);
 
-APP_TIMER_DEF(m_adc_timer_id);
+APP_TIMER_DEF(m_adc_bat_timer_id);
+APP_TIMER_DEF(m_adc_ct_timer_id);
+APP_TIMER_DEF(m_adc_calibrate_timer_id);
 
 BLE_SENSOR_DEF(m_sensor);
 
 #define RSSI_CHANGE_THRESHOLD 1
 #define RSSI_CHANGE_SKIP 1
+
+#define OPAMP_PWR_PIN NRF_GPIO_PIN_MAP(1, 10)
 
 int8_t last_rssi;
 
@@ -296,6 +306,7 @@ static void readings_send(void* p_context) {
         APP_ERROR_HANDLER(err_code);
     }
     sensor_meas = sensor_meas_zero;
+    sensor_meas.Readings_count++; // One for the CT
 }
 
 static void temperature_meas_timeout_handler(void* p_context) {
@@ -309,14 +320,71 @@ static void temperature_meas_timeout_handler(void* p_context) {
     APP_ERROR_CHECK(err_code);
 }
 
-static void adc_callback_handler(const nrfx_saadc_done_evt_t* data) {
-    if (data->size >= 1) {
+static void adc_bat_callback_handler(const nrfx_saadc_done_evt_t* data) {
+    if (data->size == BAT_SAMPLES) {
         sensor_meas.BatteryVoltage = saadc_convert_to_volts(data->p_buffer[0]);
+        NRF_LOG_INFO("%d", sensor_meas.BatteryVoltage);
     }
 }
 
-static void adc_timer_handler(void* p_context) {
-    saadc_sample(adc_callback_handler);
+static void adc_ct_callback_handler(const nrfx_saadc_done_evt_t* data) {
+    nrf_gpio_pin_clear(OPAMP_PWR_PIN);
+    if (data->size == CT_SAMPLES) {
+        int     i;
+        int32_t total = 0;
+        float   avg   = 0;
+        for (i = 0; i < data->size; i++) {
+            total += data->p_buffer[i];
+        }
+        avg = (float)total / (float)(data->size);
+        NRF_LOG_INFO("dc: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(avg));
+        float total_squared = 0;
+        float rms;
+        for (i = 0; i < data->size; i++) {
+            total_squared += pow((float)(data->p_buffer[i]) - avg, 2.0);
+        }
+        rms = sqrt(total_squared / (float)data->size);
+        NRF_LOG_INFO("rms " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(rms));
+        //RESULT = V * (GAIN/REFERENCE) * 2^(RESOLUTION)
+        float rms_v = rms / ((1.0 / 0.6) * 16384.0);
+        // 33 ohm load resistor. 100A to 50mA ct
+        float ct_rms_a = (rms_v / 33.0) * 2000.0;
+        NRF_LOG_INFO("rms " NRF_LOG_FLOAT_MARKER "mV", NRF_LOG_FLOAT(1000 * rms_v));
+        NRF_LOG_INFO("ct rms A " NRF_LOG_FLOAT_MARKER "mA", NRF_LOG_FLOAT(1000 * ct_rms_a));
+        NRF_LOG_INFO("watts " NRF_LOG_FLOAT_MARKER "W", NRF_LOG_FLOAT(ct_rms_a * 230));
+        sensor_meas.Readings[0].Current     = ct_rms_a;
+        sensor_meas.Readings[0].Id.bytes[0] = 0,
+        sensor_meas.Readings[0].Id.size     = 1;
+    }
+}
+
+static void adc_timer_scheduler(bool busy, uint32_t interval, app_timer_id_t timer_id) {
+    ret_code_t err_code;
+
+    uint32_t timeout = interval;
+    if (busy) {
+        NRF_LOG_DEBUG("ADC BUSY");
+        timeout = ADC_WAIT_INTERVAL;
+    }
+
+    err_code = app_timer_start(timer_id, timeout, NULL);
+    APP_ERROR_CHECK(err_code);
+}
+
+static void adc_bat_timer_handler(void* p_context) {
+    bool busy = saadc_sample_bat(adc_bat_callback_handler);
+    adc_timer_scheduler(busy, ADC_BAT_INTERVAL, m_adc_bat_timer_id);
+}
+
+static void adc_ct_timer_handler(void* p_context) {
+    nrf_gpio_pin_set(OPAMP_PWR_PIN);
+    bool busy = saadc_sample_ct(adc_ct_callback_handler);
+    adc_timer_scheduler(busy, ADC_CT_INTERVAL, m_adc_ct_timer_id);
+}
+
+static void adc_calibrate_timer_handler(void* p_context) {
+    bool busy = saadc_calibrate();
+    adc_timer_scheduler(busy, ADC_CALIBRATE_INTERVAL, m_adc_calibrate_timer_id);
 }
 
 static void led_timeout_handler(void* p_context) {
@@ -364,9 +432,17 @@ static void timers_init(void) {
                                 APP_TIMER_MODE_SINGLE_SHOT,
                                 readings_send);
 
-    err_code = app_timer_create(&m_adc_timer_id,
-                                APP_TIMER_MODE_REPEATED,
-                                adc_timer_handler);
+    err_code = app_timer_create(&m_adc_bat_timer_id,
+                                APP_TIMER_MODE_SINGLE_SHOT,
+                                adc_bat_timer_handler);
+
+    err_code = app_timer_create(&m_adc_ct_timer_id,
+                                APP_TIMER_MODE_SINGLE_SHOT,
+                                adc_ct_timer_handler);
+
+    err_code = app_timer_create(&m_adc_calibrate_timer_id,
+                                APP_TIMER_MODE_SINGLE_SHOT,
+                                adc_calibrate_timer_handler);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -478,7 +554,13 @@ static void application_timers_start(void) {
     err_code = app_timer_start(m_led_timer_id, LED_OFF_INTERVAL, NULL);
     APP_ERROR_CHECK(err_code);
 
-    err_code = app_timer_start(m_adc_timer_id, ADC_INTERVAL, NULL);
+    err_code = app_timer_start(m_adc_bat_timer_id, ADC_BAT_INTERVAL, NULL);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = app_timer_start(m_adc_ct_timer_id, ADC_CT_INTERVAL, NULL);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = app_timer_start(m_adc_calibrate_timer_id, ADC_CALIBRATE_INTERVAL, NULL);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -914,6 +996,10 @@ int main(void) {
     one_wire_init(&ow_temp2, m_onewire2_timer_id, ONEWIRE_DQ_PIN2, &ow_power);
     one_wire_init(&ow_temp3, m_onewire3_timer_id, ONEWIRE_DQ_PIN3, &ow_power);
     one_wire_init(&ow_temp4, m_onewire4_timer_id, ONEWIRE_DQ_PIN4, &ow_power);
+
+    nrf_gpio_cfg_output(OPAMP_PWR_PIN);
+    nrf_gpio_pin_clear(OPAMP_PWR_PIN);
+    saadc_calibrate();
 
     // Start execution.
     NRF_LOG_INFO("Sensor thing started.");
