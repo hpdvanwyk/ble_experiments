@@ -87,7 +87,7 @@ bool saadc_init(
     err_code = nrfx_saadc_buffer_convert(m_buffer_pool, len);
     APP_ERROR_CHECK(err_code);
 
-    nrf_saadc_continuous_mode_enable(80);
+    nrf_saadc_continuous_mode_enable(2000);
 
     callback = c;
     err_code = nrfx_saadc_sample();
