@@ -181,6 +181,19 @@ int iBSPACMonewireComputeCRC(const unsigned char* romp,
     static const unsigned char OW_CRC_POLY = 0x8c;
     unsigned char              crc         = 0;
 
+    int  i;
+    bool nonzero = false;
+
+    for (i = 0; i < len; i++) { // Check for all zeros
+        if (romp[i] != 0) {
+            nonzero = true;
+            break;
+        }
+    }
+    if (!nonzero) {
+        return 1; // Fail the crc if everything is zero.
+    }
+
     while (0 < len--) {
         int bi;
 
