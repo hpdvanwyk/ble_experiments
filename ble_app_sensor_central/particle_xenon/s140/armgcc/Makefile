@@ -431,3 +431,13 @@ blackmagicflash: hex
 	-ex 'compare-sections' \
 	-ex 'kill' \
 	$(OUTPUT_DIRECTORY)/nrf52840_xxaa_s140.hex
+
+blackmagicflashnosoft: default
+	arm-none-eabi-gdb -nx --batch \
+	-ex 'target extended-remote $(BLACKMAGIC_TARGET)' \
+	-ex 'monitor swdp_scan' \
+	-ex 'attach 1' \
+	-ex 'load' \
+	-ex 'compare-sections' \
+	-ex 'kill' \
+	$(OUTPUT_DIRECTORY)/nrf52840_xxaa.hex

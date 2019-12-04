@@ -432,6 +432,13 @@ blackmagicscan:
 	-ex 'monitor swdp_scan' \
 	-ex 'monitor swdp_scan' \
 
+blackmagickill:
+	arm-none-eabi-gdb -nx --batch \
+	-ex 'target extended-remote $(BLACKMAGIC_TARGET)' \
+	-ex 'monitor swdp_scan' \
+	-ex 'attach 1' \
+	-ex 'kill' \
+
 blackmagicflash: hex
 	arm-none-eabi-gdb -nx --batch \
 	-ex 'target extended-remote $(BLACKMAGIC_TARGET)' \
