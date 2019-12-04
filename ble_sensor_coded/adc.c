@@ -52,6 +52,8 @@ static nrf_saadc_value_t m_buffer_pool[SAMPLES_IN_BUFFER];
 
 adc_callback callback;
 
+bool adc_lib_in_use = false;
+
 int16_t saadc_convert_to_volts(int16_t input) {
     return (5 * 1000 * (int32_t)input) / 11378;
 }
@@ -60,9 +62,11 @@ void saadc_callback(nrfx_saadc_evt_t const* p_event) {
     if (p_event->type == NRFX_SAADC_EVT_DONE) {
         nrfx_saadc_uninit();
         callback(&p_event->data.done);
+        adc_lib_in_use = false;
     }
     if (p_event->type == NRFX_SAADC_EVT_CALIBRATEDONE) {
         nrfx_saadc_uninit();
+        adc_lib_in_use = false;
     }
 }
 
@@ -73,10 +77,10 @@ bool saadc_init(
     adc_callback                c) {
 
     nrfx_err_t err_code;
-    bool       busy = nrf_saadc_busy_check();
-    if (busy) {
+    if (adc_lib_in_use) {
         return true;
     }
+    adc_lib_in_use = true;
 
     err_code = nrfx_saadc_init(saadc_config, saadc_callback);
     APP_ERROR_CHECK(err_code);
@@ -133,10 +137,10 @@ bool saadc_calibrate() {
     saadc_config.resolution     = SAADC_RESOLUTION_VAL_14bit;
     saadc_config.oversample     = SAADC_OVERSAMPLE_OVERSAMPLE_Over32x;
 
-    bool busy = nrf_saadc_busy_check();
-    if (busy) {
+    if (adc_lib_in_use) {
         return true;
     }
+    adc_lib_in_use = true;
 
     err_code = nrfx_saadc_init(&saadc_config, saadc_callback);
     APP_ERROR_CHECK(err_code);
