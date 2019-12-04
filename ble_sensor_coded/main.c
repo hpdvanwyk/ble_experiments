@@ -93,7 +93,7 @@
 
 #define TEMPERATURE_MEAS_INTERVAL APP_TIMER_TICKS(31013)
 #define ADC_BAT_INTERVAL APP_TIMER_TICKS(120011)
-#define ADC_CT_INTERVAL APP_TIMER_TICKS(31013)
+#define ADC_CT_INTERVAL APP_TIMER_TICKS(15013)
 
 #define ADC_CALIBRATE_INTERVAL APP_TIMER_TICKS(600000)
 
@@ -182,6 +182,13 @@ static ble_uuid_t m_adv_uuids[] = /**< Universally unique service identifiers. *
         {BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}};
 
 uint32_t led_state = 0;
+
+static nrf_saadc_input_t ct_inputs[] = {
+    NRF_SAADC_INPUT_AIN5,
+    NRF_SAADC_INPUT_AIN0,
+};
+
+int current_ct = 0;
 
 /**@brief Callback function for asserts in the SoftDevice.
  *
@@ -306,7 +313,7 @@ static void readings_send(void* p_context) {
         APP_ERROR_HANDLER(err_code);
     }
     sensor_meas = sensor_meas_zero;
-    sensor_meas.Readings_count++; // One for the CT
+    sensor_meas.Readings_count += sizeof(ct_inputs); // One for the CT
 }
 
 static void temperature_meas_timeout_handler(void* p_context) {
@@ -346,15 +353,18 @@ static void adc_ct_callback_handler(const nrfx_saadc_done_evt_t* data) {
         rms = sqrt(total_squared / (float)data->size);
         NRF_LOG_INFO("rms " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(rms));
         //RESULT = V * (GAIN/REFERENCE) * 2^(RESOLUTION)
-        float rms_v = rms / ((1.0 / 0.6) * 16384.0);
-        // 33 ohm load resistor. 100A to 50mA ct
-        float ct_rms_a = (rms_v / 33.0) * 2000.0;
+        float rms_v = rms / ((0.2 / 0.6) * 16384.0);
+        // 120 ohm load resistor. 100A to 50mA ct
+        float ct_rms_a = (rms_v / 120.0) * 2000.0;
         NRF_LOG_INFO("rms " NRF_LOG_FLOAT_MARKER "mV", NRF_LOG_FLOAT(1000 * rms_v));
         NRF_LOG_INFO("ct rms A " NRF_LOG_FLOAT_MARKER "mA", NRF_LOG_FLOAT(1000 * ct_rms_a));
         NRF_LOG_INFO("watts " NRF_LOG_FLOAT_MARKER "W", NRF_LOG_FLOAT(ct_rms_a * 230));
-        sensor_meas.Readings[0].Current     = ct_rms_a;
-        sensor_meas.Readings[0].Id.bytes[0] = 0,
-        sensor_meas.Readings[0].Id.size     = 1;
+        sensor_meas.Readings[current_ct].Current     = ct_rms_a;
+        sensor_meas.Readings[current_ct].Id.bytes[0] = current_ct + 1,
+        sensor_meas.Readings[current_ct].Id.size     = 1;
+
+        current_ct++;
+        current_ct = current_ct % sizeof(ct_inputs);
     }
 }
 
@@ -378,7 +388,8 @@ static void adc_bat_timer_handler(void* p_context) {
 
 static void adc_ct_timer_handler(void* p_context) {
     nrf_gpio_pin_set(OPAMP_PWR_PIN);
-    bool busy = saadc_sample_ct(adc_ct_callback_handler);
+    NRF_LOG_INFO("sample ct %d", current_ct);
+    bool busy = saadc_sample_ct(ct_inputs[current_ct], adc_ct_callback_handler);
     adc_timer_scheduler(busy, ADC_CT_INTERVAL, m_adc_ct_timer_id);
 }
 
@@ -968,6 +979,7 @@ static void tx_power_set(void) {
 int main(void) {
     bool       erase_bonds;
     ret_code_t err;
+    sensor_meas.Readings_count += sizeof(ct_inputs); // Measurements for the CTs
 
     // Initialize.
     log_init();

@@ -48,7 +48,7 @@
 typedef void (*adc_callback)(const nrfx_saadc_done_evt_t* data);
 
 bool saadc_sample_bat(adc_callback callback);
-bool saadc_sample_ct(adc_callback callback);
+bool saadc_sample_ct(nrf_saadc_input_t input, adc_callback callback);
 
 int16_t saadc_convert_to_volts(int16_t input);
 bool    saadc_calibrate();

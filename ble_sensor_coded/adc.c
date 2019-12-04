@@ -113,7 +113,7 @@ bool saadc_sample_bat(adc_callback c) {
     return saadc_init(&saadc_config, &channel_config, BAT_SAMPLES, c);
 }
 
-bool saadc_sample_ct(adc_callback c) {
+bool saadc_sample_ct(nrf_saadc_input_t input, adc_callback c) {
     NRF_LOG_INFO("CT start");
     nrfx_saadc_config_t saadc_config =
         NRFX_SAADC_DEFAULT_CONFIG;
@@ -122,9 +122,9 @@ bool saadc_sample_ct(adc_callback c) {
     saadc_config.oversample     = SAADC_OVERSAMPLE_OVERSAMPLE_Over64x;
 
     nrf_saadc_channel_config_t channel_config =
-        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN5);
+        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(input);
     channel_config.burst = SAADC_CH_CONFIG_BURST_Enabled;
-    channel_config.gain  = NRF_SAADC_GAIN1;
+    channel_config.gain  = NRF_SAADC_GAIN1_5;
 
     return saadc_init(&saadc_config, &channel_config, CT_SAMPLES, c);
 }
