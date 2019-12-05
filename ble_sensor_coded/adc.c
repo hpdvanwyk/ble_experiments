@@ -43,16 +43,45 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include "nrf.h"
 #include "nrfx_saadc.h"
 #include "nrf_log.h"
+#include "app_timer.h"
 #include "adc.h"
+#include "nrf_gpio.h"
+
+#define SAMPLES_IN_BUFFER 480
+#define BAT_SAMPLES 1
+#define CT_SAMPLES SAMPLES_IN_BUFFER
+
+#define ADC_BAT_INTERVAL APP_TIMER_TICKS(120011)
+#define ADC_CT_INTERVAL APP_TIMER_TICKS(15013)
+#define ADC_CALIBRATE_INTERVAL APP_TIMER_TICKS(600000)
+#define ADC_WAIT_INTERVAL APP_TIMER_TICKS(1000)
+
+#define OPAMP_PWR_PIN NRF_GPIO_PIN_MAP(1, 10)
+
+typedef void (*adc_callback)(const nrfx_saadc_done_evt_t* data);
+
+APP_TIMER_DEF(m_adc_bat_timer_id);
+APP_TIMER_DEF(m_adc_ct_timer_id);
+APP_TIMER_DEF(m_adc_calibrate_timer_id);
+
+int current_ct = 0;
 
 static nrf_saadc_value_t m_buffer_pool[SAMPLES_IN_BUFFER];
 
 adc_callback callback;
 
 bool adc_lib_in_use = false;
+
+static nrf_saadc_input_t ct_inputs[] = {
+    NRF_SAADC_INPUT_AIN5,
+    NRF_SAADC_INPUT_AIN0,
+};
+
+extern SensorMessage sensor_meas;
 
 int16_t saadc_convert_to_volts(int16_t input) {
     return (5 * 1000 * (int32_t)input) / 11378;
@@ -148,4 +177,106 @@ bool saadc_calibrate() {
     err_code = nrfx_saadc_calibrate_offset();
     APP_ERROR_CHECK(err_code);
     return false;
+}
+
+static void adc_bat_callback_handler(const nrfx_saadc_done_evt_t* data) {
+    if (data->size == BAT_SAMPLES) {
+        sensor_meas.BatteryVoltage = saadc_convert_to_volts(data->p_buffer[0]);
+        NRF_LOG_INFO("%d", sensor_meas.BatteryVoltage);
+    }
+}
+
+static void adc_timer_scheduler(bool busy, uint32_t interval, app_timer_id_t timer_id) {
+    ret_code_t err_code;
+
+    uint32_t timeout = interval;
+    if (busy) {
+        NRF_LOG_DEBUG("ADC BUSY");
+        timeout = ADC_WAIT_INTERVAL;
+    }
+
+    err_code = app_timer_start(timer_id, timeout, NULL);
+    APP_ERROR_CHECK(err_code);
+}
+
+static void adc_ct_callback_handler(const nrfx_saadc_done_evt_t* data) {
+    nrf_gpio_pin_clear(OPAMP_PWR_PIN);
+    if (data->size == CT_SAMPLES) {
+        int     i;
+        int32_t total = 0;
+        float   avg   = 0;
+        for (i = 0; i < data->size; i++) {
+            total += data->p_buffer[i];
+        }
+        avg = (float)total / (float)(data->size);
+        NRF_LOG_INFO("dc: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(avg));
+        float total_squared = 0;
+        float rms;
+        for (i = 0; i < data->size; i++) {
+            total_squared += pow((float)(data->p_buffer[i]) - avg, 2.0);
+        }
+        rms = sqrt(total_squared / (float)data->size);
+        NRF_LOG_INFO("rms " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(rms));
+        //RESULT = V * (GAIN/REFERENCE) * 2^(RESOLUTION)
+        float rms_v = rms / ((0.2 / 0.6) * 16384.0);
+        // 120 ohm load resistor. 100A to 50mA ct
+        float ct_rms_a = (rms_v / 120.0) * 2000.0;
+        NRF_LOG_INFO("rms " NRF_LOG_FLOAT_MARKER "mV", NRF_LOG_FLOAT(1000 * rms_v));
+        NRF_LOG_INFO("ct rms A " NRF_LOG_FLOAT_MARKER "mA", NRF_LOG_FLOAT(1000 * ct_rms_a));
+        NRF_LOG_INFO("watts " NRF_LOG_FLOAT_MARKER "W", NRF_LOG_FLOAT(ct_rms_a * 230));
+        sensor_meas.Readings[current_ct].Current     = ct_rms_a;
+        sensor_meas.Readings[current_ct].Id.bytes[0] = current_ct + 1,
+        sensor_meas.Readings[current_ct].Id.size     = 1;
+
+        current_ct++;
+        current_ct = current_ct % sizeof(ct_inputs);
+    }
+}
+
+static void adc_bat_timer_handler(void* p_context) {
+    bool busy = saadc_sample_bat(adc_bat_callback_handler);
+    adc_timer_scheduler(busy, ADC_BAT_INTERVAL, m_adc_bat_timer_id);
+}
+
+static void adc_ct_timer_handler(void* p_context) {
+    nrf_gpio_pin_set(OPAMP_PWR_PIN);
+    NRF_LOG_INFO("sample ct %d", current_ct);
+    bool busy = saadc_sample_ct(ct_inputs[current_ct], adc_ct_callback_handler);
+    adc_timer_scheduler(busy, ADC_CT_INTERVAL, m_adc_ct_timer_id);
+}
+
+static void adc_calibrate_timer_handler(void* p_context) {
+    bool busy = saadc_calibrate();
+    adc_timer_scheduler(busy, ADC_CALIBRATE_INTERVAL, m_adc_calibrate_timer_id);
+}
+
+void adclib_init() {
+    ret_code_t err_code;
+
+    nrf_gpio_cfg_output(OPAMP_PWR_PIN);
+    nrf_gpio_pin_clear(OPAMP_PWR_PIN);
+    saadc_calibrate();
+
+    err_code = app_timer_create(&m_adc_bat_timer_id,
+                                APP_TIMER_MODE_SINGLE_SHOT,
+                                adc_bat_timer_handler);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = app_timer_create(&m_adc_ct_timer_id,
+                                APP_TIMER_MODE_SINGLE_SHOT,
+                                adc_ct_timer_handler);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = app_timer_create(&m_adc_calibrate_timer_id,
+                                APP_TIMER_MODE_SINGLE_SHOT,
+                                adc_calibrate_timer_handler);
+    APP_ERROR_CHECK(err_code);
+    err_code = app_timer_start(m_adc_bat_timer_id, ADC_BAT_INTERVAL, NULL);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = app_timer_start(m_adc_ct_timer_id, ADC_CT_INTERVAL, NULL);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = app_timer_start(m_adc_calibrate_timer_id, ADC_CALIBRATE_INTERVAL, NULL);
+    APP_ERROR_CHECK(err_code);
 }

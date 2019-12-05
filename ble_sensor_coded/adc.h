@@ -40,15 +40,6 @@
  */
 
 #include "nrf_drv_saadc.h"
+#include "sensor.pb.h"
 
-#define SAMPLES_IN_BUFFER 480
-#define BAT_SAMPLES 1
-#define CT_SAMPLES SAMPLES_IN_BUFFER
-
-typedef void (*adc_callback)(const nrfx_saadc_done_evt_t* data);
-
-bool saadc_sample_bat(adc_callback callback);
-bool saadc_sample_ct(nrf_saadc_input_t input, adc_callback callback);
-
-int16_t saadc_convert_to_volts(int16_t input);
-bool    saadc_calibrate();
+void adclib_init();
