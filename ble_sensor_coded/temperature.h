@@ -38,7 +38,6 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-
 #include "sensor.pb.h"
 
-void adclib_init();
+void temperaturelib_init();

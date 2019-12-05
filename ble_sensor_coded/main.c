@@ -76,10 +76,8 @@
 #include "nrf_log_default_backends.h"
 
 #include "ble_sensor.h"
-#include "utility/onewire.h"
-#include "utility/hires.h"
-#include "ow_temp/ow_temp.h"
 #include "adc.h"
+#include "temperature.h"
 
 #define DEVICE_NAME "Can has bluetooth?"        /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME "NordicSemiconductor" /**< Manufacturer. Will be passed to Device Information Service. */
@@ -89,8 +87,6 @@
 
 #define APP_BLE_CONN_CFG_TAG 1  /**< A tag identifying the SoftDevice BLE configuration. */
 #define APP_BLE_OBSERVER_PRIO 3 /**< Application's BLE observer priority. You shouldn't need to modify this value. */
-
-#define TEMPERATURE_MEAS_INTERVAL APP_TIMER_TICKS(31013)
 
 #define LED_OFF_INTERVAL APP_TIMER_TICKS(9950)
 #define LED_ON_INTERVAL APP_TIMER_TICKS(50)
@@ -120,35 +116,9 @@
 #define LED_BLUE LED2_B
 #define LED_RED LED2_R
 
-oo_power_t ow_power;
-#define ONEWIRE_PWR_PIN NRF_GPIO_PIN_MAP(0, 22)
-
-#define ONEWIRE_DQ_PIN 13
-APP_TIMER_DEF(m_onewire_timer_id);
-oo_temp_reader_t ow_temp1;
-
-#define ONEWIRE_DQ_PIN2 15
-//#define ONEWIRE_PWR_PIN2 NRF_GPIO_PIN_MAP(0, 13)
-APP_TIMER_DEF(m_onewire2_timer_id);
-oo_temp_reader_t ow_temp2;
-
-#define ONEWIRE_DQ_PIN3 17
-//#define ONEWIRE_PWR_PIN3 NRF_GPIO_PIN_MAP(0, 17)
-APP_TIMER_DEF(m_onewire3_timer_id);
-oo_temp_reader_t ow_temp3;
-
-#define ONEWIRE_DQ_PIN4 20
-//#define ONEWIRE_PWR_PIN4 NRF_GPIO_PIN_MAP(0, 22)
-APP_TIMER_DEF(m_onewire4_timer_id);
-oo_temp_reader_t ow_temp4;
-
-#define SENSORS_READ_TIME APP_TIMER_TICKS(1000)
-
 NRF_BLE_GATT_DEF(m_gatt);           /**< GATT module instance. */
 NRF_BLE_QWR_DEF(m_qwr);             /**< Context for the Queued Write module.*/
 BLE_ADVERTISING_DEF(m_advertising); /**< Advertising module instance. */
-APP_TIMER_DEF(m_temp_timer_id);
-APP_TIMER_DEF(m_temp_send_timer_id);
 APP_TIMER_DEF(m_led_timer_id);
 
 BLE_SENSOR_DEF(m_sensor);
@@ -264,23 +234,7 @@ static void pm_evt_handler(pm_evt_t const* p_evt) {
     }
 }
 
-static void temperature_update(ow_temp_reading_t* reading) {
-
-    int i                               = sensor_meas.Readings_count;
-    sensor_meas.Readings[i].Temperature = reading->temperature;
-    memcpy(sensor_meas.Readings[i].Id.bytes,
-           reading->serial.id,
-           ID_SIZE); // C does not have a sane way of getting a struct members size.
-    sensor_meas.Readings[i].Id.size = ID_SIZE;
-    sensor_meas.Readings_count++;
-
-    NRF_LOG_INFO("temp1 %d", reading->temperature);
-    NRF_LOG_INFO("Serial %02x:%02x:%02x:%02x:%02x:%02x ",
-                 reading->serial.id[0], reading->serial.id[1], reading->serial.id[2],
-                 reading->serial.id[3], reading->serial.id[4], reading->serial.id[5]);
-}
-
-static void readings_send(void* p_context) {
+void readings_send(void* p_context) {
     ret_code_t err_code;
     sensor_meas.rssi = last_rssi;
     err_code         = ble_sensor_measurement_send(&m_sensor, &sensor_meas);
@@ -295,17 +249,6 @@ static void readings_send(void* p_context) {
     sensor_meas = sensor_meas_zero;
     sensor_meas.Readings_count += 2; // One for the CT
     // TODO
-}
-
-static void temperature_meas_timeout_handler(void* p_context) {
-    ret_code_t err_code;
-    UNUSED_PARAMETER(p_context);
-    read_one_wire_temp(&ow_temp1, temperature_update, 11);
-    read_one_wire_temp(&ow_temp2, temperature_update, 11);
-    read_one_wire_temp(&ow_temp3, temperature_update, 11);
-    read_one_wire_temp(&ow_temp4, temperature_update, 11);
-    err_code = app_timer_start(m_temp_send_timer_id, SENSORS_READ_TIME, NULL);
-    APP_ERROR_CHECK(err_code);
 }
 
 static void led_timeout_handler(void* p_context) {
@@ -341,19 +284,10 @@ static void timers_init(void) {
     APP_ERROR_CHECK(err_code);
 
     // Create timers.
-    err_code = app_timer_create(&m_temp_timer_id,
-                                APP_TIMER_MODE_REPEATED,
-                                temperature_meas_timeout_handler);
-    APP_ERROR_CHECK(err_code);
-
     err_code = app_timer_create(&m_led_timer_id,
                                 APP_TIMER_MODE_SINGLE_SHOT,
                                 led_timeout_handler);
-    APP_ERROR_CHECK(err_code);
 
-    err_code = app_timer_create(&m_temp_send_timer_id,
-                                APP_TIMER_MODE_SINGLE_SHOT,
-                                readings_send);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -457,12 +391,7 @@ static void services_init(void) {
  */
 static void application_timers_start(void) {
     ret_code_t err_code;
-
-    // Start application timers.
-    err_code = app_timer_start(m_temp_timer_id, TEMPERATURE_MEAS_INTERVAL, NULL);
-    APP_ERROR_CHECK(err_code);
-
-    err_code = app_timer_start(m_led_timer_id, LED_OFF_INTERVAL, NULL);
+    err_code = app_timer_start(m_led_timer_id, LED_ON_INTERVAL, NULL);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -895,12 +824,7 @@ int main(void) {
     peer_manager_init();
     tx_power_set();
 
-    one_wire_power_init(&ow_power, ONEWIRE_PWR_PIN);
-    one_wire_init(&ow_temp1, m_onewire_timer_id, ONEWIRE_DQ_PIN, &ow_power);
-    one_wire_init(&ow_temp2, m_onewire2_timer_id, ONEWIRE_DQ_PIN2, &ow_power);
-    one_wire_init(&ow_temp3, m_onewire3_timer_id, ONEWIRE_DQ_PIN3, &ow_power);
-    one_wire_init(&ow_temp4, m_onewire4_timer_id, ONEWIRE_DQ_PIN4, &ow_power);
-
+    temperaturelib_init();
     adclib_init();
 
     // Start execution.
