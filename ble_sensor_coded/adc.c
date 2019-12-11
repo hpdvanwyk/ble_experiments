@@ -51,7 +51,7 @@
 #include "adc.h"
 #include "nrf_gpio.h"
 
-#define SAMPLES_IN_BUFFER 480
+#define SAMPLES_IN_BUFFER 375
 #define BAT_SAMPLES 1
 #define CT_SAMPLES SAMPLES_IN_BUFFER
 
@@ -120,7 +120,7 @@ bool saadc_init(
     err_code = nrfx_saadc_buffer_convert(m_buffer_pool, len);
     APP_ERROR_CHECK(err_code);
 
-    nrf_saadc_continuous_mode_enable(2000);
+    nrf_saadc_continuous_mode_enable(80);
 
     callback = c;
     err_code = nrfx_saadc_sample();
@@ -133,7 +133,7 @@ bool saadc_sample_bat(adc_callback c) {
         NRFX_SAADC_DEFAULT_CONFIG;
     saadc_config.low_power_mode = true;
     saadc_config.resolution     = SAADC_RESOLUTION_VAL_12bit;
-    saadc_config.oversample     = SAADC_OVERSAMPLE_OVERSAMPLE_Over8x;
+    saadc_config.oversample     = SAADC_OVERSAMPLE_OVERSAMPLE_Over256x;
 
     nrf_saadc_channel_config_t channel_config =
         NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(SAADC_CH_PSELP_PSELP_VDDHDIV5);
@@ -148,12 +148,13 @@ bool saadc_sample_ct(nrf_saadc_input_t input, adc_callback c) {
         NRFX_SAADC_DEFAULT_CONFIG;
     saadc_config.low_power_mode = false;
     saadc_config.resolution     = SAADC_RESOLUTION_VAL_14bit;
-    saadc_config.oversample     = SAADC_OVERSAMPLE_OVERSAMPLE_Over64x;
+    saadc_config.oversample     = SAADC_OVERSAMPLE_OVERSAMPLE_Over128x;
 
     nrf_saadc_channel_config_t channel_config =
         NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(input);
-    channel_config.burst = SAADC_CH_CONFIG_BURST_Enabled;
-    channel_config.gain  = NRF_SAADC_GAIN1_5;
+    channel_config.burst    = SAADC_CH_CONFIG_BURST_Disabled;
+    channel_config.gain     = NRF_SAADC_GAIN1_5;
+    channel_config.acq_time = NRF_SAADC_ACQTIME_5US;
 
     return saadc_init(&saadc_config, &channel_config, CT_SAMPLES, c);
 }
@@ -165,6 +166,8 @@ bool saadc_calibrate() {
     saadc_config.low_power_mode = false;
     saadc_config.resolution     = SAADC_RESOLUTION_VAL_14bit;
     saadc_config.oversample     = SAADC_OVERSAMPLE_OVERSAMPLE_Over32x;
+
+    NRF_LOG_INFO("ADC calibrate start");
 
     if (adc_lib_in_use) {
         return true;
@@ -218,7 +221,7 @@ static void adc_ct_callback_handler(const nrfx_saadc_done_evt_t* data) {
         rms = sqrt(total_squared / (float)data->size);
         NRF_LOG_INFO("rms " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(rms));
         //RESULT = V * (GAIN/REFERENCE) * 2^(RESOLUTION)
-        float rms_v = rms / ((0.2 / 0.6) * 16384.0);
+        float rms_v = rms / (((1.0 / 5.0) / 0.6) * 16384.0);
         // 120 ohm load resistor. 100A to 50mA ct
         float ct_rms_a = (rms_v / 120.0) * 2000.0;
         NRF_LOG_INFO("rms " NRF_LOG_FLOAT_MARKER "mV", NRF_LOG_FLOAT(1000 * rms_v));
