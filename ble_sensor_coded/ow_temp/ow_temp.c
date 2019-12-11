@@ -174,11 +174,11 @@ static void temp_wait_timeout_handler(void* p_context) {
         reader->reading.temperature = 1;
     }
 
-    reader->callback(&reader->reading);
+    reader->callback(&reader->reading, reader->callback_context);
     return;
 }
 
-int read_one_wire_temp(oo_temp_reader_t* reader, temp_callback callback, int resolution) {
+int read_one_wire_temp(oo_temp_reader_t* reader, int resolution, temp_callback callback, void* context) {
     int ret;
     power_on(reader->power);
     hiresOn();
@@ -190,6 +190,7 @@ int read_one_wire_temp(oo_temp_reader_t* reader, temp_callback callback, int res
         return ret;
     }
     reader->callback = callback;
+    reader->callback_context = context;
 
     ret_code_t err_code = app_timer_start(reader->timer_id, reader->convert_wait, reader);
     APP_ERROR_CHECK(err_code);

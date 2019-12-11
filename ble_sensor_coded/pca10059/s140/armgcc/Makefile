@@ -140,6 +140,7 @@ SRC_FILES += \
   $(NANOPB_DIR)/pb_common.c \
   $(PROJ_DIR)/pb/sensor.pb.c \
   $(PROJ_DIR)/adc.c \
+  $(PROJ_DIR)/temperature.c \
 
 # Include folders common to all targets
 INC_FOLDERS += \

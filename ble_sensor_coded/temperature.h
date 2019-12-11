@@ -39,5 +39,10 @@
  *
  */
 #include "sensor.pb.h"
+#include "ble_sensor.h"
 
-void temperaturelib_init();
+typedef struct {
+    ble_sensor_t* ble_handle;
+} temperaturelib_t;
+
+void temperaturelib_init(temperaturelib_t* tl);

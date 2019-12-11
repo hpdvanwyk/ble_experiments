@@ -123,15 +123,12 @@ APP_TIMER_DEF(m_led_timer_id);
 
 BLE_SENSOR_DEF(m_sensor);
 
+temperaturelib_t tl;
+
 #define RSSI_CHANGE_THRESHOLD 1
 #define RSSI_CHANGE_SKIP 1
 
-int8_t last_rssi;
-
 static uint16_t m_conn_handle = BLE_CONN_HANDLE_INVALID; /**< Handle of the current connection. */
-
-SensorMessage sensor_meas      = SensorMessage_init_zero;
-SensorMessage sensor_meas_zero = SensorMessage_init_zero;
 
 static ble_uuid_t m_adv_uuids[] = /**< Universally unique service identifiers. */
     {
@@ -232,23 +229,6 @@ static void pm_evt_handler(pm_evt_t const* p_evt) {
     default:
         break;
     }
-}
-
-void readings_send(void* p_context) {
-    ret_code_t err_code;
-    sensor_meas.rssi = last_rssi;
-    err_code         = ble_sensor_measurement_send(&m_sensor, &sensor_meas);
-    if ((err_code != NRF_SUCCESS) &&
-        (err_code != NRF_ERROR_INVALID_STATE) &&
-        (err_code != NRF_ERROR_RESOURCES) &&
-        (err_code != NRF_ERROR_BUSY) &&
-        (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING) &&
-        (err_code != NRF_ERROR_FORBIDDEN)) {
-        APP_ERROR_HANDLER(err_code);
-    }
-    sensor_meas = sensor_meas_zero;
-    sensor_meas.Readings_count += 2; // One for the CT
-    // TODO
 }
 
 static void led_timeout_handler(void* p_context) {
@@ -569,7 +549,7 @@ static void ble_evt_handler(ble_evt_t const* p_ble_evt, void* p_context) {
 
     case BLE_GAP_EVT_RSSI_CHANGED: {
         int8_t rssi = p_ble_evt->evt.gap_evt.params.rssi_changed.rssi;
-        last_rssi   = rssi;
+        set_last_rssi(&m_sensor, rssi);
         NRF_LOG_DEBUG("rssi %d", rssi);
     } break;
 
@@ -799,8 +779,6 @@ static void tx_power_set(void) {
 int main(void) {
     bool       erase_bonds;
     ret_code_t err;
-    sensor_meas.Readings_count += 2; // Measurements for the CTs
-    // TODO
 
     // Initialize.
     log_init();
@@ -824,8 +802,9 @@ int main(void) {
     peer_manager_init();
     tx_power_set();
 
-    temperaturelib_init();
-    adclib_init();
+    tl.ble_handle = &m_sensor;
+    temperaturelib_init(&tl);
+    adclib_init(&m_sensor);
 
     // Start execution.
     NRF_LOG_INFO("Sensor thing started.");

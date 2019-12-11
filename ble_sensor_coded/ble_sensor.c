@@ -43,10 +43,13 @@
 #include <string.h>
 #include "ble_srv_common.h"
 #include "nrf_log.h"
+#include "app_error.h"
 
 #include "ble_sensor.h"
 #include "sensor.pb.h"
 #include "pb_encode.h"
+
+SensorMessage sensor_meas_zero = SensorMessage_init_zero;
 
 static void on_connect(ble_sensor_t* p_ts, ble_evt_t const* p_ble_evt) {
     p_ts->conn_handle = p_ble_evt->evt.gatts_evt.conn_handle;
@@ -159,11 +162,14 @@ uint32_t ble_sensor_init(ble_sensor_t* p_ts, ble_sensor_init_t const* p_sensor_i
     if (err_code != NRF_SUCCESS) {
         return err_code;
     }
+    p_ts->sensor_meas = sensor_meas_zero;
+    p_ts->sensor_meas.Readings_count += 2; // Measurements for the CTs
+    // TODO
 
     return NRF_SUCCESS;
 }
 
-uint32_t ble_sensor_measurement_send(ble_sensor_t* p_ts, SensorMessage* sensor_meas) {
+uint32_t ble_sensor_measurement_send(ble_sensor_t* p_ts) {
     uint32_t err_code;
 
     // Send value if connected
@@ -179,16 +185,19 @@ uint32_t ble_sensor_measurement_send(ble_sensor_t* p_ts, SensorMessage* sensor_m
     bool         status;
     pb_ostream_t stream;
 
-    stream = pb_ostream_from_buffer(data, sizeof(data));
-    status = pb_encode(&stream, SensorMessage_fields, sensor_meas);
-    len = stream.bytes_written;
+    p_ts->sensor_meas.rssi = p_ts->last_rssi;
+
+    stream  = pb_ostream_from_buffer(data, sizeof(data));
+    status  = pb_encode(&stream, SensorMessage_fields, &(p_ts->sensor_meas));
+    len     = stream.bytes_written;
     hvx_len = len;
-    NRF_LOG_INFO("len send %d", len);
 
     if (!status) {
         NRF_LOG_ERROR("Encoding failed: %s", PB_GET_ERROR(&stream));
         return NRF_ERROR_INVALID_DATA;
     }
+
+    NRF_LOG_INFO("len send %d", len);
 
     memset(&hvx_params, 0, sizeof(hvx_params));
 
@@ -204,4 +213,28 @@ uint32_t ble_sensor_measurement_send(ble_sensor_t* p_ts, SensorMessage* sensor_m
     }
 
     return err_code;
+}
+
+void readings_send(ble_sensor_t* p_ts) {
+    ret_code_t err_code;
+    err_code = ble_sensor_measurement_send(p_ts);
+    if ((err_code != NRF_SUCCESS) &&
+        (err_code != NRF_ERROR_INVALID_STATE) &&
+        (err_code != NRF_ERROR_RESOURCES) &&
+        (err_code != NRF_ERROR_BUSY) &&
+        (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING) &&
+        (err_code != NRF_ERROR_FORBIDDEN)) {
+        APP_ERROR_HANDLER(err_code);
+    }
+    p_ts->sensor_meas = sensor_meas_zero;
+    p_ts->sensor_meas.Readings_count += 2; // One for the CT
+    // TODO
+}
+
+void set_last_rssi(ble_sensor_t* p_ts, int8_t rssi) {
+    p_ts->last_rssi = rssi;
+}
+
+SensorMessage* message(ble_sensor_t* p_sensor) {
+    return &p_sensor->sensor_meas;
 }

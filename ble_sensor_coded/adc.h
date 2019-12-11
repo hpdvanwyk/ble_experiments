@@ -40,5 +40,6 @@
  */
 
 #include "sensor.pb.h"
+#include "ble_sensor.h"
 
-void adclib_init();
+void adclib_init(ble_sensor_t* p_ble_sensor);

@@ -62,9 +62,9 @@ extern "C" {
  * @param   _name   Name of the instance.
  * @hideinitializer
  */
-#define BLE_SENSOR_DEF(_name)                           \
-    static ble_sensor_t _name;                          \
-    NRF_SDH_BLE_OBSERVER(_name##_obs,               \
+#define BLE_SENSOR_DEF(_name)                          \
+    static ble_sensor_t _name;                         \
+    NRF_SDH_BLE_OBSERVER(_name##_obs,                  \
                          BLE_SENSOR_BLE_OBSERVER_PRIO, \
                          ble_sensor_on_ble_evt, &_name)
 
@@ -87,22 +87,26 @@ typedef void (*ble_sensor_evt_handler_t)(ble_sensor_t* p_ts, ble_sensor_evt_t* p
 typedef struct
 {
     ble_sensor_evt_handler_t evt_handler;
-    security_req_t       ht_meas_cccd_wr_sec;
+    security_req_t           ht_meas_cccd_wr_sec;
 } ble_sensor_init_t;
 
 struct ble_sensor_s {
-    ble_sensor_evt_handler_t     evt_handler;
+    ble_sensor_evt_handler_t evt_handler;
     uint16_t                 service_handle;
     ble_gatts_char_handles_t meas_handles;
     uint16_t                 conn_handle;
+
+    int8_t        last_rssi;
+    SensorMessage sensor_meas;
 };
 
 uint32_t ble_sensor_init(ble_sensor_t* p_ts, const ble_sensor_init_t* p_sensor_init);
 
 void ble_sensor_on_ble_evt(ble_evt_t const* p_ble_evt, void* p_context);
 
-uint32_t ble_sensor_measurement_send(ble_sensor_t* p_sensor, SensorMessage* sensor_sensor);
-
+void           readings_send(ble_sensor_t* p_ts);
+SensorMessage* message(ble_sensor_t* p_sensor);
+void           set_last_rssi(ble_sensor_t* p_ts, int8_t rssi);
 
 #ifdef __cplusplus
 }

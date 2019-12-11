@@ -74,14 +74,13 @@ static nrf_saadc_value_t m_buffer_pool[SAMPLES_IN_BUFFER];
 
 adc_callback callback;
 
-bool adc_lib_in_use = false;
+ble_sensor_t* p_ble_adclib;
+bool          adc_lib_in_use = false;
 
 static nrf_saadc_input_t ct_inputs[] = {
     NRF_SAADC_INPUT_AIN5,
     NRF_SAADC_INPUT_AIN0,
 };
-
-extern SensorMessage sensor_meas;
 
 int16_t saadc_convert_to_volts(int16_t input) {
     return (5 * 1000 * (int32_t)input) / 11378;
@@ -184,8 +183,9 @@ bool saadc_calibrate() {
 
 static void adc_bat_callback_handler(const nrfx_saadc_done_evt_t* data) {
     if (data->size == BAT_SAMPLES) {
-        sensor_meas.BatteryVoltage = saadc_convert_to_volts(data->p_buffer[0]);
-        NRF_LOG_INFO("%d", sensor_meas.BatteryVoltage);
+        SensorMessage* sensor_meas  = message(p_ble_adclib);
+        sensor_meas->BatteryVoltage = saadc_convert_to_volts(data->p_buffer[0]);
+        NRF_LOG_INFO("%d", sensor_meas->BatteryVoltage);
     }
 }
 
@@ -227,9 +227,10 @@ static void adc_ct_callback_handler(const nrfx_saadc_done_evt_t* data) {
         NRF_LOG_INFO("rms " NRF_LOG_FLOAT_MARKER "mV", NRF_LOG_FLOAT(1000 * rms_v));
         NRF_LOG_INFO("ct rms A " NRF_LOG_FLOAT_MARKER "mA", NRF_LOG_FLOAT(1000 * ct_rms_a));
         NRF_LOG_INFO("watts " NRF_LOG_FLOAT_MARKER "W", NRF_LOG_FLOAT(ct_rms_a * 230));
-        sensor_meas.Readings[current_ct].Current     = ct_rms_a;
-        sensor_meas.Readings[current_ct].Id.bytes[0] = current_ct + 1,
-        sensor_meas.Readings[current_ct].Id.size     = 1;
+        SensorMessage* sensor_meas                    = message(p_ble_adclib);
+        sensor_meas->Readings[current_ct].Current     = ct_rms_a;
+        sensor_meas->Readings[current_ct].Id.bytes[0] = current_ct + 1,
+        sensor_meas->Readings[current_ct].Id.size     = 1;
 
         current_ct++;
         current_ct = current_ct % sizeof(ct_inputs);
@@ -253,8 +254,10 @@ static void adc_calibrate_timer_handler(void* p_context) {
     adc_timer_scheduler(busy, ADC_CALIBRATE_INTERVAL, m_adc_calibrate_timer_id);
 }
 
-void adclib_init() {
+void adclib_init(ble_sensor_t* p_ble_sensor) {
     ret_code_t err_code;
+
+    p_ble_adclib = p_ble_sensor;
 
     nrf_gpio_cfg_output(OPAMP_PWR_PIN);
     nrf_gpio_pin_clear(OPAMP_PWR_PIN);

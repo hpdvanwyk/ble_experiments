@@ -40,7 +40,7 @@ typedef struct
     sBSPACMonewireSerialNumber serial;
 } ow_temp_reading_t;
 
-typedef void (*temp_callback)(ow_temp_reading_t* reading);
+typedef void (*temp_callback)(ow_temp_reading_t* reading, void* context);
 
 typedef struct {
     uint32_t power_pin;
@@ -54,11 +54,12 @@ typedef struct {
     app_timer_id_t    timer_id;
     ow_temp_reading_t reading;
     temp_callback     callback;
+    void*             callback_context;
     oo_power_t*       power;
     uint32_t          convert_wait;
 } oo_temp_reader_t;
 
-int read_one_wire_temp(oo_temp_reader_t* reader, temp_callback callback, int resolution);
+int read_one_wire_temp(oo_temp_reader_t* reader, int resolution, temp_callback callback, void* context);
 
 void one_wire_power_init(oo_power_t* reader, uint32_t pwr_pin);
 void one_wire_init(oo_temp_reader_t* reader, app_timer_id_t timer_id, int dq_pin, oo_power_t* power);

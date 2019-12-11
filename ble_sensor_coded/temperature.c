@@ -59,33 +59,29 @@ APP_TIMER_DEF(m_onewire_timer_id);
 oo_temp_reader_t ow_temp1;
 
 #define ONEWIRE_DQ_PIN2 15
-//#define ONEWIRE_PWR_PIN2 NRF_GPIO_PIN_MAP(0, 13)
 APP_TIMER_DEF(m_onewire2_timer_id);
 oo_temp_reader_t ow_temp2;
 
 #define ONEWIRE_DQ_PIN3 17
-//#define ONEWIRE_PWR_PIN3 NRF_GPIO_PIN_MAP(0, 17)
 APP_TIMER_DEF(m_onewire3_timer_id);
 oo_temp_reader_t ow_temp3;
 
 #define ONEWIRE_DQ_PIN4 20
-//#define ONEWIRE_PWR_PIN4 NRF_GPIO_PIN_MAP(0, 22)
 APP_TIMER_DEF(m_onewire4_timer_id);
 oo_temp_reader_t ow_temp4;
 
-extern SensorMessage sensor_meas;
-extern int8_t        last_rssi;
-extern void          readings_send(void* p_context);
+static void temperature_update(ow_temp_reading_t* reading, void* context) {
+    temperaturelib_t* tl          = (temperaturelib_t*)context;
+    SensorMessage*    sensor_meas = message(tl->ble_handle);
 
-static void temperature_update(ow_temp_reading_t* reading) {
+    int i = sensor_meas->Readings_count;
 
-    int i                               = sensor_meas.Readings_count;
-    sensor_meas.Readings[i].Temperature = reading->temperature;
-    memcpy(sensor_meas.Readings[i].Id.bytes,
+    sensor_meas->Readings[i].Temperature = reading->temperature;
+    memcpy(sensor_meas->Readings[i].Id.bytes,
            reading->serial.id,
            ID_SIZE); // C does not have a sane way of getting a struct members size.
-    sensor_meas.Readings[i].Id.size = ID_SIZE;
-    sensor_meas.Readings_count++;
+    sensor_meas->Readings[i].Id.size = ID_SIZE;
+    sensor_meas->Readings_count++;
 
     NRF_LOG_INFO("temp1 %d", reading->temperature);
     NRF_LOG_INFO("Serial %02x:%02x:%02x:%02x:%02x:%02x ",
@@ -94,17 +90,20 @@ static void temperature_update(ow_temp_reading_t* reading) {
 }
 
 static void temperature_meas_timeout_handler(void* p_context) {
-    ret_code_t err_code;
-    UNUSED_PARAMETER(p_context);
-    read_one_wire_temp(&ow_temp1, temperature_update, 11);
-    read_one_wire_temp(&ow_temp2, temperature_update, 11);
-    read_one_wire_temp(&ow_temp3, temperature_update, 11);
-    read_one_wire_temp(&ow_temp4, temperature_update, 11);
-    err_code = app_timer_start(m_temp_send_timer_id, SENSORS_READ_TIME, NULL);
+    ret_code_t        err_code;
+    temperaturelib_t* tl = (temperaturelib_t*)p_context;
+    read_one_wire_temp(&ow_temp1, 11, temperature_update, tl);
+    read_one_wire_temp(&ow_temp2, 11, temperature_update, tl);
+    read_one_wire_temp(&ow_temp3, 11, temperature_update, tl);
+    read_one_wire_temp(&ow_temp4, 11, temperature_update, tl);
+    err_code = app_timer_start(m_temp_send_timer_id, SENSORS_READ_TIME, tl->ble_handle);
     APP_ERROR_CHECK(err_code);
 }
+void readings_send_wrapper(void* p_context) {
+    readings_send(p_context);
+}
 
-void temperaturelib_init() {
+void temperaturelib_init(temperaturelib_t* tl) {
     ret_code_t err_code;
     err_code = app_timer_create(&m_temp_timer_id,
                                 APP_TIMER_MODE_REPEATED,
@@ -112,7 +111,7 @@ void temperaturelib_init() {
     APP_ERROR_CHECK(err_code);
     err_code = app_timer_create(&m_temp_send_timer_id,
                                 APP_TIMER_MODE_SINGLE_SHOT,
-                                readings_send);
+                                readings_send_wrapper);
     APP_ERROR_CHECK(err_code);
 
     one_wire_power_init(&ow_power, ONEWIRE_PWR_PIN);
@@ -122,6 +121,6 @@ void temperaturelib_init() {
     one_wire_init(&ow_temp4, m_onewire4_timer_id, ONEWIRE_DQ_PIN4, &ow_power);
 
     // Start application timers.
-    err_code = app_timer_start(m_temp_timer_id, TEMPERATURE_MEAS_INTERVAL, NULL);
+    err_code = app_timer_start(m_temp_timer_id, TEMPERATURE_MEAS_INTERVAL, tl);
     APP_ERROR_CHECK(err_code);
 }
