@@ -38,13 +38,15 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#ifndef BLE_LOGIC_H__
+#define BLE_LOGIC_H__
 
-#ifndef ADC_H__
-#define ADC_H__
-
-#include "sensor.pb.h"
 #include "ble_sensor.h"
 
-void adclib_init(ble_sensor_t* p_ble_sensor);
+void          advertising_start(bool erase_bonds);
+ble_sensor_t* ble_libs_init();
+void          idle_state_handle(void);
+void          whitelist_off(void);
+bool          is_connected(void);
 
-#endif // ADC_H__
+#endif // BLE_LOGIC_H__

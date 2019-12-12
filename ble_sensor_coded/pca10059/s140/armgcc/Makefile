@@ -141,6 +141,7 @@ SRC_FILES += \
   $(PROJ_DIR)/pb/sensor.pb.c \
   $(PROJ_DIR)/adc.c \
   $(PROJ_DIR)/temperature.c \
+  $(PROJ_DIR)/ble_logic.c \
 
 # Include folders common to all targets
 INC_FOLDERS += \

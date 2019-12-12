@@ -38,6 +38,9 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#ifndef TEMPERATURE_H__
+#define TEMPERATURE_H__
+
 #include "sensor.pb.h"
 #include "ble_sensor.h"
 
@@ -46,3 +49,5 @@ typedef struct {
 } temperaturelib_t;
 
 void temperaturelib_init(temperaturelib_t* tl);
+
+#endif // TEMPERATURE_H_
