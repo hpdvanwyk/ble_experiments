@@ -74,6 +74,7 @@ func (s *SensorReader) ReadLoop() {
 		log.Print(err)
 		return
 	}
+	defer port.Close()
 	delimReader := gogoio.NewDelimitedReader(&retryReader{port}, 2048)
 	defer delimReader.Close()
 	for {
