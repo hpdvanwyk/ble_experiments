@@ -4,7 +4,7 @@ github.com/beorn7/perks/quantile
 github.com/cespare/xxhash/v2
 # github.com/creack/goselect v0.1.0
 github.com/creack/goselect
-# github.com/gogo/protobuf v1.3.1
+# github.com/gogo/protobuf v1.3.2
 github.com/gogo/protobuf/io
 github.com/gogo/protobuf/proto
 # github.com/golang/protobuf v1.3.2
@@ -28,7 +28,8 @@ github.com/prometheus/procfs/internal/util
 # go.bug.st/serial.v1 v0.0.0-20180827123349-5f7892a7bb45
 go.bug.st/serial.v1
 go.bug.st/serial.v1/unixutils
-# golang.org/x/sys v0.0.0-20191018095205-727590c5006e
+# golang.org/x/sys v0.0.0-20200930185726-fdedc70b468f
+golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 # gopkg.in/yaml.v2 v2.2.4
