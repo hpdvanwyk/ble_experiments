@@ -40,7 +40,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const DefaultExpiryTime = 100 * time.Second
+const DefaultExpiryTime = 300 * time.Second
 
 type SensorConfig struct {
 	Rename  map[string]string
@@ -98,6 +98,25 @@ func (se *SensorExporter) updateMetric(value float64,
 	labels ...*label) {
 	se.Lock()
 	defer se.Unlock()
+	t := se.getMetric(opts, expiryTime, labels...)
+	t.value = value
+	t.lastUpdated = time.Now()
+}
+
+func (se *SensorExporter) incrementMetric(value float64,
+	opts *prometheus.GaugeOpts,
+	expiryTime time.Duration,
+	labels ...*label) {
+	se.Lock()
+	defer se.Unlock()
+	t := se.getMetric(opts, expiryTime, labels...)
+	t.value += value
+	t.lastUpdated = time.Now()
+}
+
+func (se *SensorExporter) getMetric(opts *prometheus.GaugeOpts,
+	expiryTime time.Duration,
+	labels ...*label) *metric {
 	k := opts.Name + "~"
 	for i := range labels {
 		k += labels[i].key + "~" + labels[i].value + "~"
@@ -111,8 +130,7 @@ func (se *SensorExporter) updateMetric(value float64,
 		}
 		se.metrics[k] = t
 	}
-	t.value = value
-	t.lastUpdated = time.Now()
+	return t
 }
 
 func (se *SensorExporter) gc() {
@@ -173,6 +191,11 @@ var BatteryVoltageOpts = prometheus.GaugeOpts{
 	Help: "Battery voltage.",
 }
 
+var MessageCountOpts = prometheus.GaugeOpts{
+	Name: "ble_message_count",
+	Help: "Number of messages received.",
+}
+
 func NewSensorExporter(config *SensorConfig) *SensorExporter {
 	s := &SensorExporter{
 		MsgChan: make(chan *Messages, 2),
@@ -209,6 +232,12 @@ func (s *SensorExporter) exportCentral(msg *Messages) *pb.CentralMessage {
 		float64(msg.Central.Rssi),
 		&RssiOpts,
 		expiryTime,
+		&label{"remoteid", s.IdString(msg.Central.RemoteId)},
+	)
+	s.incrementMetric(
+		float64(1),
+		&MessageCountOpts,
+		expiryTime * 30, // Don't want badly connected devices to constantly reset counter.
 		&label{"remoteid", s.IdString(msg.Central.RemoteId)},
 	)
 
