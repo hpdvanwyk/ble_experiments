@@ -30,12 +30,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package main
 
 import (
-	"ble_experiment_exporter/pb"
 	"io"
 	"log"
 	"syscall"
 
-	gogoio "github.com/gogo/protobuf/io"
+	"github.com/hpdvanwyk/ble_experiments/ble_experiments_exporter/pb"
+
 	"go.bug.st/serial.v1"
 )
 
@@ -75,7 +75,7 @@ func (s *SensorReader) ReadLoop() {
 		return
 	}
 	defer port.Close()
-	delimReader := gogoio.NewDelimitedReader(&retryReader{port}, 2048)
+	delimReader := NewDelimitedReader(&retryReader{port}, 2048)
 	defer delimReader.Close()
 	for {
 		msg, err := readMessages(delimReader)
@@ -92,8 +92,9 @@ type Messages struct {
 	Sensor  *pb.SensorMessage
 }
 
-func readMessages(r gogoio.ReadCloser) (*Messages, error) {
+func readMessages(r ReadCloser) (*Messages, error) {
 	centralMsg := pb.CentralMessage{}
+
 	err := r.ReadMsg(&centralMsg)
 	if err != nil {
 		return nil, err

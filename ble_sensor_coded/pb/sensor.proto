@@ -1,7 +1,7 @@
 syntax = "proto3";
 import "nanopb.proto";
 
-option go_package = "pb";
+option go_package = "github.com/hpdvanwyk/ble_experiments/ble_experiments_exporter/pb";
 
 message CentralMessage {
     sint32 rssi = 1;

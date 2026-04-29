@@ -35,7 +35,7 @@ import (
 	"sync"
 	"time"
 
-	"ble_experiment_exporter/pb"
+	"github.com/hpdvanwyk/ble_experiments/ble_experiments_exporter/pb"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
