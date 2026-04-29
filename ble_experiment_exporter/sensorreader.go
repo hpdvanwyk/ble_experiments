@@ -71,7 +71,7 @@ func (s *SensorReader) ReadLoop() {
 	}
 	port, err := serial.Open(s.tty, mode)
 	if err != nil {
-		log.Print(err)
+		log.Printf("error opening %v, %s", s.tty, err)
 		return
 	}
 	defer port.Close()
@@ -80,7 +80,7 @@ func (s *SensorReader) ReadLoop() {
 	for {
 		msg, err := readMessages(delimReader)
 		if err != nil {
-			log.Print(err)
+			log.Printf("error reading %v, %s", s.tty, err)
 			return
 		}
 		s.msgChan <- msg
